@@ -54,14 +54,18 @@ export default function(opts){
         client.onSend(JSON.stringify({name: table.name, stamp: useStamp?.stamp, edit: useEdit?.edit, session: true}))
     })
 
-    const updates = new Map()
+    const adds = new Set()
+    const edits = new Map()
+    const subs = new Set()
 
     const routine = setInterval(() => {
-        for(const [prop, update] of updates.entries()){
-            if((Date.now() - update) > 900000){
-                updates.delete(prop)
+        adds.clear()
+        for(const [prop, update] of edits.entries()){
+            if((Date.now() - update) > 300000){
+                edits.delete(prop)
             }
         }
+        subs.clear()
     }, 180000)
 
     async function add(name, data, ret = null){
@@ -134,41 +138,45 @@ export default function(opts){
             if(debug){
                 console.log('Received Message: ', typeof(data), data)
             }
+
             const datas = JSON.parse(data)
-            if(datas.user === user){
-                return
-            }
+
             if(db[datas.name]){
                 if(datas.status){
+                    if(datas.user === user){
+                        return
+                    }
                     if(datas.status === 'add'){
-                        if(datas.user !== user){
-                            await db[datas.name].add(datas.data)
+                        if(adds.has(datas.iden)){
+                            return
                         }
-                        client.onMesh(data, nick)
+                        await db[datas.name].add(datas.data)
+                        adds.add(datas.iden)
                     } else if(datas.status === 'edit'){
-                        if(datas.user !== user){
-                            if(updates.has(datas.iden)){
-                                const test = updates.get(datas.iden)
-                                if(datas.edit > test){
-                                    updates.set(datas.iden, datas.edit)
-                                    await db[datas.name].update(datas.iden, datas.data)
-                                }
-                            } else {
-                                updates.set(datas.iden, datas.edit)
+                        if(edits.has(datas.iden)){
+                            const test = edits.get(datas.iden)
+                            if(datas.edit > test){
                                 await db[datas.name].update(datas.iden, datas.data)
+                                edits.set(datas.iden, datas.edit)
+                            } else {
+                                return
                             }
+                        } else {
+                            await db[datas.name].update(datas.iden, datas.data)
+                            edits.set(datas.iden, datas.edit)
                         }
-                        client.onMesh(data, nick)
                     } else if(datas.status === 'sub'){
                         if(!keep){
-                            if(datas.user !== user){
-                                await db[datas.name].delete(datas.iden)
+                            if(subs.has(datas.iden)){
+                                return
                             }
+                            await db[datas.name].delete(datas.iden)
+                            subs.add(datas.iden)
                         }
-                        client.onMesh(data, nick)
                     } else {
                         return
                     }
+                    client.onMesh(data, nick)
                 } else {
                     if(datas.session){
                         let stamp
@@ -239,7 +247,7 @@ export default function(opts){
 
     function quit(){
         clearInterval(routine)
-        updates.clear()
+        edits.clear()
         client.off('connect', connect)
         client.off('error', err)
         client.off('message', message)
