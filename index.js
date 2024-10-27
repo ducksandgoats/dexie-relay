@@ -7,6 +7,8 @@ export default function(opts){
 
     const force = opts.force === false ? opts.force : true
 
+    const keep = opts.keep === true ? opts.keep : false
+
     const user = localStorage.getItem('user') || (() => {const test = crypto.randomUUID();localStorage.setItem('user', test);return test;})()
     
     function id(){return crypto.randomUUID()}
@@ -79,10 +81,10 @@ export default function(opts){
     async function edit(name, prop, data, ret = null){
         if(db[name]){
             const test = db[name].get(prop)
-            if(test && test.user === user){
+            if((test && test.user === user) && (!data.user || data.user === user)){
                 data.edit = Date.now()
                 const num = await db[name].update(prop, data)
-                client.onSend(JSON.stringify({name, prop, data, iden: test.iden, user: test.user, edit: data.edit, num, status: 'edit'}))
+                client.onSend(JSON.stringify({name, data, iden: test.iden, user: test.user, edit: data.edit, num, status: 'edit'}))
                 if(ret){
                     return num
                 }
@@ -97,7 +99,7 @@ export default function(opts){
                 if(force){
                     await db[name].delete(prop)
                     if(test.user === user){
-                        client.onSend(JSON.stringify({name, prop, user: test.user, status: 'sub'}))
+                        client.onSend(JSON.stringify({name, iden: test.iden, user: test.user, status: 'sub'}))
                         if(ret){
                             return prop
                         }
@@ -105,7 +107,7 @@ export default function(opts){
                 } else {
                     if(test.user === user){
                         await db[name].delete(prop)
-                        client.onSend(JSON.stringify({name, prop, user: test.user, status: 'sub'}))
+                        client.onSend(JSON.stringify({name, iden: test.iden, user: test.user, status: 'sub'}))
                         if(ret){
                             return prop
                         }
@@ -127,7 +129,7 @@ export default function(opts){
     client.on('connect', connect)
     client.on('error', err)
     client.on('disconnect', disconnect)
-    const message = async (data, iden) => {
+    const message = async (data, nick) => {
         try {
             if(debug){
                 console.log('Received Message: ', typeof(data), data)
@@ -139,24 +141,31 @@ export default function(opts){
             if(db[datas.name]){
                 if(datas.status){
                     if(datas.status === 'add'){
-                        await db[datas.name].add(datas.data)
-                        client.onMesh(data, iden)
-                    } else if(datas.status === 'edit'){
-                        if(updates.has(datas.id)){
-                            const test = updates.get(datas.id)
-                            if(datas.edit > test){
-                                updates.set(datas.iden, datas.edit)
-                                await db[datas.name].update(datas.prop, datas.data)
-                                client.onMesh(data, iden)
-                            }
-                        } else {
-                            updates.set(datas.iden, datas.edit)
-                            await db[datas.name].update(datas.prop, datas.data)
-                            client.onMesh(data, iden)
+                        if(datas.user !== user){
+                            await db[datas.name].add(datas.data)
                         }
+                        client.onMesh(data, nick)
+                    } else if(datas.status === 'edit'){
+                        if(datas.user !== user){
+                            if(updates.has(datas.iden)){
+                                const test = updates.get(datas.iden)
+                                if(datas.edit > test){
+                                    updates.set(datas.iden, datas.edit)
+                                    await db[datas.name].update(datas.iden, datas.data)
+                                }
+                            } else {
+                                updates.set(datas.iden, datas.edit)
+                                await db[datas.name].update(datas.iden, datas.data)
+                            }
+                        }
+                        client.onMesh(data, nick)
                     } else if(datas.status === 'sub'){
-                        await db[datas.name].delete(datas.prop)
-                        client.onMesh(data, iden)
+                        if(!keep){
+                            if(datas.user !== user){
+                                await db[datas.name].delete(datas.iden)
+                            }
+                        }
+                        client.onMesh(data, nick)
                     } else {
                         return
                     }
@@ -194,14 +203,10 @@ export default function(opts){
                             } catch {
                                 hasStamp = {}
                             }
-                            const stamps = hasStamp?.stamp ? datas.stamp.filter((e) => {return e.stamp > hasStamp.stamp}) : datas.stamp
+                            const stamps = hasStamp?.stamp ? datas.stamp.filter((e) => {return e.stamp > hasStamp.stamp && e.user !== user}) : datas.stamp
                             for(const stamp of stamps){
                                 try {
-                                    if(stamp.user === user){
-                                        continue
-                                    } else {
-                                        await db[datas.name].put(stamp)
-                                    }
+                                    await db[datas.name].put(stamp)
                                 } catch {
                                     continue
                                 }
@@ -214,14 +219,10 @@ export default function(opts){
                             } catch {
                                 hasEdit = {}
                             }
-                            const edits = hasEdit?.edit ? datas.edit.filter((e) => {return e.edit > hasEdit.edit}) : datas.edit
+                            const edits = hasEdit?.edit ? datas.edit.filter((e) => {return e.edit > hasEdit.edit && e.user !== user}) : datas.edit
                             for(const edit of edits){
                                 try {
-                                    if(edit.user === user){
-                                        continue
-                                    } else {
-                                        await db[datas.name].put(edit)
-                                    }
+                                    await db[datas.name].put(edit)
                                 } catch {
                                     continue
                                 }
