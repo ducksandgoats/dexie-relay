@@ -148,10 +148,10 @@ export default function(opts){
             const dataTab = db.table(datas.name)
 
             if(dataTab){
-                if(datas.user === user){
-                    return
-                }
                 if(datas.status === 'add'){
+                    if(datas.user === user){
+                        return
+                    }
                     if(adds.has(datas.iden)){
                         return
                     }
@@ -159,6 +159,9 @@ export default function(opts){
                     adds.add(datas.iden)
                     client.onMesh(data, nick)
                 } else if(datas.status === 'edit'){
+                    if(datas.user === user){
+                        return
+                    }
                     if(edits.has(datas.iden)){
                         const test = edits.get(datas.iden)
                         if(datas.edit > test){
@@ -174,6 +177,9 @@ export default function(opts){
                         client.onMesh(data, nick)
                     }
                 } else if(datas.status === 'sub'){
+                    if(datas.user === user){
+                        return
+                    }
                     if(subs.has(datas.iden)){
                         return
                     }
