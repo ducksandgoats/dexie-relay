@@ -111,7 +111,7 @@ export default function(opts){
         }
     }
     
-    const connect = async (chan) => {
+    const connect = (chan) => {
         console.log('connected: ' + chan)
 
         db.tables.forEach(async (table) => {
@@ -131,7 +131,7 @@ export default function(opts){
         })
     }
     const err = (e, chan) => {console.error(e, chan)}
-    const disconnect = async (chan) => {
+    const disconnect = (chan) => {
         console.log('disconnected: ' + chan)
     }
     client.on('connect', connect)
