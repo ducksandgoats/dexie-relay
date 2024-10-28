@@ -16,7 +16,7 @@ export default function(opts){
     const client = new Client(opts.url, opts.hash, opts.rtor)
 
     for(const records in opts.schema){
-        const record = opts.schema[records].split(',')
+        const record = opts.schema[records].split(',').map((data) => {return data.replaceAll(' ', '')})
         if(!record.includes('stamp')){
             record.push('stamp')
         }
