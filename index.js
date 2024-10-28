@@ -38,22 +38,6 @@ export default function(opts){
     }
     db.version(opts.version).stores(opts.schema)
 
-    db.tables.forEach(async (table) => {
-        let useStamp
-        let useEdit
-        try {
-            useStamp = await table.where('stamp').notEqual(0).last()
-        } catch {
-            useStamp = {}
-        }
-        try {
-            useEdit = await table.where('edit').notEqual(0).last()
-        } catch {
-            useEdit = {}
-        }
-        client.onSend(JSON.stringify({name: table.name, stamp: useStamp?.stamp, edit: useEdit?.edit, session: true}))
-    })
-
     const adds = new Set()
     const edits = new Map()
     const subs = new Set()
@@ -127,9 +111,29 @@ export default function(opts){
         }
     }
     
-    const connect = (chan) => {console.log('connected: ' + chan)}
+    const connect = async (chan) => {
+        console.log('connected: ' + chan)
+
+        db.tables.forEach(async (table) => {
+            let useStamp
+            let useEdit
+            try {
+                useStamp = await table.where('stamp').notEqual(0).last()
+            } catch {
+                useStamp = {}
+            }
+            try {
+                useEdit = await table.where('edit').notEqual(0).last()
+            } catch {
+                useEdit = {}
+            }
+            client.onSend(JSON.stringify({name: table.name, stamp: useStamp?.stamp, edit: useEdit?.edit, session: true}), chan)
+        })
+    }
     const err = (e, chan) => {console.error(e, chan)}
-    const disconnect = (chan) => {console.log('disconnected: ' + chan)}
+    const disconnect = async (chan) => {
+        console.log('disconnected: ' + chan)
+    }
     client.on('connect', connect)
     client.on('error', err)
     client.on('disconnect', disconnect)
