@@ -167,13 +167,12 @@ export default class Base extends EventEmitter {
                                 hasStamp = {}
                             }
                             const stamps = hasStamp?.stamp ? datas.stamp.filter((e) => {return e.stamp > hasStamp.stamp && e.user !== this.user}) : datas.stamp
-                            for(const stamp of stamps){
-                                try {
-                                    await dataTab.put(stamp)
-                                } catch {
-                                    continue
-                                }
+                            try {
+                                await dataTab.bulkAdd(stamps)
+                            } catch (error) {
+                                console.error(error)
                             }
+                            this.emit('sync', stamps.map((data) => {return data.iden}))
                         }
                         if(datas.edit){
                             let hasEdit
@@ -183,13 +182,12 @@ export default class Base extends EventEmitter {
                                 hasEdit = {}
                             }
                             const edits = hasEdit?.edit ? datas.edit.filter((e) => {return e.edit > hasEdit.edit && e.user !== this.user}) : datas.edit
-                            for(const edit of edits){
-                                try {
-                                    await dataTab.put(edit)
-                                } catch {
-                                    continue
-                                }
+                            try {
+                                await dataTab.bulkAdd(edits)
+                            } catch (error) {
+                                console.error(error)
                             }
+                            this.emit('sync', edits.map((data) => {return data.iden}))
                         }
                     } else {
                         return
