@@ -263,5 +263,5 @@ export default function(opts){
         db.close()
     }
 
-    return {id, db, client, quit, crud: {add, edit, sub, clear}}
+    return {id, db, quit, crud: {add, edit, sub, clear}}
 }
