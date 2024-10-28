@@ -4,6 +4,7 @@ import {EventEmitter} from 'events'
 
 export default class Base extends EventEmitter {
     constructor(opts){
+        super()
         this.debug = opts.debug
 
         this.force = opts.force === false ? opts.force : true
