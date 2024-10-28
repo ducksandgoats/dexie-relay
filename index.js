@@ -127,7 +127,7 @@ export default function(opts){
             } catch {
                 useEdit = {}
             }
-            client.onSend(JSON.stringify({name: table.name, stamp: useStamp?.stamp, edit: useEdit?.edit, request: true}), chan)
+            client.onSend(JSON.stringify({name: table.name, user, stamp: useStamp?.stamp, edit: useEdit?.edit, request: true}), chan)
         })
     }
     const err = (e, chan) => {console.error(e, chan)}
@@ -192,9 +192,10 @@ export default function(opts){
                     }
                     while(stamp.length){
                         datas.status = 'response'
+                        datas.user = user
                         datas.edit = null
                         datas.stamp = stamp.splice(stamp.length - 50, 50)
-                        client.onSend(JSON.stringify(datas), iden)
+                        client.onSend(JSON.stringify(datas), nick)
                     }
                     try {
                         edit = datas.edit ? await dataTab.where('edit').above(datas.edit).toArray() : await dataTab.where('edit').toArray()
@@ -203,9 +204,10 @@ export default function(opts){
                     }
                     while(edit.length){
                         datas.status = 'response'
+                        datas.user = user
                         datas.stamp = null
                         datas.edit = edit.splice(edit.length - 50, 50)
-                        client.onSend(JSON.stringify(datas), iden)
+                        client.onSend(JSON.stringify(datas), nick)
                     }
                 } else if(datas.status === 'response'){
                     if(datas.stamp){
