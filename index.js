@@ -127,7 +127,7 @@ export default function(opts){
             } catch {
                 useEdit = {}
             }
-            client.onSend(JSON.stringify({name: table.name, stamp: useStamp?.stamp, edit: useEdit?.edit, session: true}), chan)
+            client.onSend(JSON.stringify({name: table.name, stamp: useStamp?.stamp, edit: useEdit?.edit, request: true}), chan)
         })
     }
     const err = (e, chan) => {console.error(e, chan)}
@@ -145,106 +145,106 @@ export default function(opts){
 
             const datas = JSON.parse(data)
 
-            if(db[datas.name]){
-                if(datas.status){
-                    if(datas.user === user){
+            const dataTab = db.table(datas.name)
+
+            if(dataTab){
+                if(datas.user === user){
+                    return
+                }
+                if(datas.status === 'add'){
+                    if(adds.has(datas.iden)){
                         return
                     }
-                    if(datas.status === 'add'){
-                        if(adds.has(datas.iden)){
-                            return
-                        }
-                        await db[datas.name].add(datas.data)
-                        adds.add(datas.iden)
-                        client.onMesh(data, nick)
-                    } else if(datas.status === 'edit'){
-                        if(edits.has(datas.iden)){
-                            const test = edits.get(datas.iden)
-                            if(datas.edit > test){
-                                await db[datas.name].update(datas.iden, datas.data)
-                                edits.set(datas.iden, datas.edit)
-                                client.onMesh(data, nick)
-                            } else {
-                                return
-                            }
-                        } else {
-                            await db[datas.name].update(datas.iden, datas.data)
+                    await dataTab.add(datas.data)
+                    adds.add(datas.iden)
+                    client.onMesh(data, nick)
+                } else if(datas.status === 'edit'){
+                    if(edits.has(datas.iden)){
+                        const test = edits.get(datas.iden)
+                        if(datas.edit > test){
+                            await dataTab.update(datas.iden, datas.data)
                             edits.set(datas.iden, datas.edit)
                             client.onMesh(data, nick)
-                        }
-                    } else if(datas.status === 'sub'){
-                        if(subs.has(datas.iden)){
+                        } else {
                             return
                         }
-                        if(!keep){
-                            await db[datas.name].delete(datas.iden)
-                        }
-                        subs.add(datas.iden)
-                        client.onMesh(data, nick)
                     } else {
+                        await dataTab.update(datas.iden, datas.data)
+                        edits.set(datas.iden, datas.edit)
+                        client.onMesh(data, nick)
+                    }
+                } else if(datas.status === 'sub'){
+                    if(subs.has(datas.iden)){
                         return
                     }
-                } else {
-                    if(datas.session){
-                        let stamp
-                        let edit
+                    if(!keep){
+                        await dataTab.delete(datas.iden)
+                    }
+                    subs.add(datas.iden)
+                    client.onMesh(data, nick)
+                } else if(datas.status === 'request'){
+                    let stamp
+                    let edit
+                    try {
+                        stamp = datas.stamp ? await dataTab.where('stamp').above(datas.stamp).toArray() : await dataTab.where('stamp').toArray()
+                    } catch {
+                        stamp = []
+                    }
+                    while(stamp.length){
+                        datas.status = 'response'
+                        datas.edit = null
+                        datas.stamp = stamp.splice(stamp.length - 50, 50)
+                        client.onSend(JSON.stringify(datas), iden)
+                    }
+                    try {
+                        edit = datas.edit ? await dataTab.where('edit').above(datas.edit).toArray() : await dataTab.where('edit').toArray()
+                    } catch {
+                        edit = []
+                    }
+                    while(edit.length){
+                        datas.status = 'response'
+                        datas.stamp = null
+                        datas.edit = edit.splice(edit.length - 50, 50)
+                        client.onSend(JSON.stringify(datas), iden)
+                    }
+                } else if(datas.status === 'response'){
+                    if(datas.stamp){
+                        let hasStamp
                         try {
-                            stamp = datas.stamp ? await db[datas.name].where('stamp').above(datas.stamp).toArray() : await db[datas.name].where('stamp').toArray()
+                            hasStamp = await dataTab.where('stamp').notEqual(0).last()
                         } catch {
-                            stamp = []
+                            hasStamp = {}
                         }
-                        while(stamp.length){
-                            datas.session = false
-                            datas.edit = null
-                            datas.stamp = stamp.splice(stamp.length - 50, 50)
-                            client.onSend(JSON.stringify(datas), iden)
-                        }
-                        try {
-                            edit = datas.edit ? await db[datas.name].where('edit').above(datas.edit).toArray() : await db[datas.name].where('edit').toArray()
-                        } catch {
-                            edit = []
-                        }
-                        while(edit.length){
-                            datas.session = false
-                            datas.stamp = null
-                            datas.edit = edit.splice(edit.length - 50, 50)
-                            client.onSend(JSON.stringify(datas), iden)
-                        }
-                    } else {
-                        if(datas.stamp){
-                            let hasStamp
+                        const stamps = hasStamp?.stamp ? datas.stamp.filter((e) => {return e.stamp > hasStamp.stamp && e.user !== user}) : datas.stamp
+                        for(const stamp of stamps){
                             try {
-                                hasStamp = await db[datas.name].where('stamp').notEqual(0).last()
+                                await dataTab.put(stamp)
                             } catch {
-                                hasStamp = {}
-                            }
-                            const stamps = hasStamp?.stamp ? datas.stamp.filter((e) => {return e.stamp > hasStamp.stamp && e.user !== user}) : datas.stamp
-                            for(const stamp of stamps){
-                                try {
-                                    await db[datas.name].put(stamp)
-                                } catch {
-                                    continue
-                                }
-                            }
-                        }
-                        if(datas.edit){
-                            let hasEdit
-                            try {
-                                hasEdit = await db[datas.name].where('edit').notEqual(0).last()
-                            } catch {
-                                hasEdit = {}
-                            }
-                            const edits = hasEdit?.edit ? datas.edit.filter((e) => {return e.edit > hasEdit.edit && e.user !== user}) : datas.edit
-                            for(const edit of edits){
-                                try {
-                                    await db[datas.name].put(edit)
-                                } catch {
-                                    continue
-                                }
+                                continue
                             }
                         }
                     }
+                    if(datas.edit){
+                        let hasEdit
+                        try {
+                            hasEdit = await dataTab.where('edit').notEqual(0).last()
+                        } catch {
+                            hasEdit = {}
+                        }
+                        const edits = hasEdit?.edit ? datas.edit.filter((e) => {return e.edit > hasEdit.edit && e.user !== user}) : datas.edit
+                        for(const edit of edits){
+                            try {
+                                await dataTab.put(edit)
+                            } catch {
+                                continue
+                            }
+                        }
+                    }
+                } else {
+                    return
                 }
+            } else {
+                console.log('no db or table')
             }
         } catch {
             return
