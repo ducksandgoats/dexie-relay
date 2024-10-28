@@ -152,31 +152,34 @@ export default function(opts){
                         }
                         await db[datas.name].add(datas.data)
                         adds.add(datas.iden)
+                        client.onMesh(data, nick)
                     } else if(datas.status === 'edit'){
                         if(edits.has(datas.iden)){
                             const test = edits.get(datas.iden)
                             if(datas.edit > test){
                                 await db[datas.name].update(datas.iden, datas.data)
                                 edits.set(datas.iden, datas.edit)
+                                client.onMesh(data, nick)
                             } else {
                                 return
                             }
                         } else {
                             await db[datas.name].update(datas.iden, datas.data)
                             edits.set(datas.iden, datas.edit)
+                            client.onMesh(data, nick)
                         }
                     } else if(datas.status === 'sub'){
-                        if(!keep){
-                            if(subs.has(datas.iden)){
-                                return
-                            }
-                            await db[datas.name].delete(datas.iden)
-                            subs.add(datas.iden)
+                        if(subs.has(datas.iden)){
+                            return
                         }
+                        if(!keep){
+                            await db[datas.name].delete(datas.iden)
+                        }
+                        subs.add(datas.iden)
+                        client.onMesh(data, nick)
                     } else {
                         return
                     }
-                    client.onMesh(data, nick)
                 } else {
                     if(datas.session){
                         let stamp
