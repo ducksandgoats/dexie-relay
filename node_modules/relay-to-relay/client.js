@@ -76,7 +76,7 @@ export default class Client extends Events {
             }
             return
         }
-        this.socket = new WebSocket(`${this.url}?hash=${this.hash}&id=${this.id}`)
+        this.socket = new WebSocket(`ws://${this.url}/signal?hash=${this.hash}&id=${this.id}`)
         this.socket.handleOpen = (e) => {
             if(this.dev){
                 console.log('websocket connected')
