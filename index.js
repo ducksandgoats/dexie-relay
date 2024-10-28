@@ -127,7 +127,7 @@ export default function(opts){
             } catch {
                 useEdit = {}
             }
-            client.onSend(JSON.stringify({name: table.name, user, stamp: useStamp?.stamp, edit: useEdit?.edit, request: true}), chan)
+            client.onSend(JSON.stringify({name: table.name, user, stamp: useStamp?.stamp, edit: useEdit?.edit, status: 'request'}), chan)
         })
     }
     const err = (e, chan) => {console.error(e, chan)}
