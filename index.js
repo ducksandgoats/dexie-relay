@@ -179,7 +179,7 @@ export default class Base extends EventEmitter {
                     return
                 }
             } else {
-                console.log('no db or table')
+                return
             }
         } catch {
             return
