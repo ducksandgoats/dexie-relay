@@ -19,7 +19,7 @@ export default class Base extends EventEmitter {
         
         this.client = new Client(opts.url, opts.hash, opts.rtor)
 
-        this.crud = {}
+        // this.crud = {}
     
         for(const records in opts.schema){
             const record = opts.schema[records].split(',').map((data) => {return data.replaceAll(' ', '')})
@@ -37,7 +37,7 @@ export default class Base extends EventEmitter {
             }
             opts.schema[records] = record.join(',')
 
-            this.crud[records] = {table: () => {return tables(records)}, clear: async () => {return await clears(records)}, add: async (data) => {return await adds(records, data)}, sub: async (prop) => {return await subs(records, prop)}, ret: async (prop) => {return await rets(records, prop)}, edit: async (prop, data) => {return await edits(records, prop, data)}}
+            // this.crud[records] = {table: () => {return tables(records)}, clear: async () => {return await clears(records)}, add: async (data) => {return await adds(records, data)}, sub: async (prop) => {return await subs(records, prop)}, ret: async (prop) => {return await rets(records, prop)}, edit: async (prop, data) => {return await edits(records, prop, data)}}
         }
         
         this.db = new Dexie(opts.name, {})
@@ -46,70 +46,70 @@ export default class Base extends EventEmitter {
         }
         this.db.version(opts.version).stores(opts.schema)
 
-        const rets = async (name, prop) => {
-            const dataTab = this.db.table(name)
-            return await dataTab.get(prop)
-        }
+        // const rets = async (name, prop) => {
+        //     const dataTab = this.db.table(name)
+        //     return await dataTab.get(prop)
+        // }
 
-        const adds = async (name, data) => {
-            const dataTab = this.db.table(name)
-            data.stamp = data.stamp || Date.now()
-            data.user = data.user || this._user
-            data.iden = data.iden || crypto.randomUUID()
-            data.edit = 0
-            const test = await dataTab.add(data)
-            // this.emit('add', test)
-            this.client.onSend(JSON.stringify({name, data, user: data.user, stamp: data.stamp, iden: test, status: 'add'}))
-            return test
-        }
+        // const adds = async (name, data) => {
+        //     const dataTab = this.db.table(name)
+        //     data.stamp = data.stamp || Date.now()
+        //     data.user = data.user || this._user
+        //     data.iden = data.iden || crypto.randomUUID()
+        //     data.edit = 0
+        //     const test = await dataTab.add(data)
+        //     // this.emit('add', test)
+        //     this.client.onSend(JSON.stringify({name, data, user: data.user, stamp: data.stamp, iden: test, status: 'add'}))
+        //     return test
+        // }
 
-        const edits = async (name, prop, data) => {
-            const dataTab = this.db.table(name)
-            const test = await dataTab.get(prop)
-            if((test && test.user === this._user) && (!data.user || data.user === this._user)){
-                data.edit = Date.now()
-                const num = await dataTab.update(prop, data)
-                // this.emit('edit', test.iden)
-                this.client.onSend(JSON.stringify({name, data, iden: test.iden, user: test.user, edit: data.edit, num, status: 'edit'}))
-                return test.iden
-            } else {
-                throw new Error('user does not match')
-            }
-        }
+        // const edits = async (name, prop, data) => {
+        //     const dataTab = this.db.table(name)
+        //     const test = await dataTab.get(prop)
+        //     if((test && test.user === this._user) && (!data.user || data.user === this._user)){
+        //         data.edit = Date.now()
+        //         const num = await dataTab.update(prop, data)
+        //         // this.emit('edit', test.iden)
+        //         this.client.onSend(JSON.stringify({name, data, iden: test.iden, user: test.user, edit: data.edit, num, status: 'edit'}))
+        //         return test.iden
+        //     } else {
+        //         throw new Error('user does not match')
+        //     }
+        // }
 
-        const subs = async (name, prop) => {
-            const dataTab = this.db.table(name)
-            const test = await dataTab.get(prop)
-            if(!test){
-                throw new Error('did not find data')
-            }
-            if(this._force){
-                await dataTab.delete(prop)
-                // this.emit('sub', test.iden)
-                if(test.user === this._user){
-                    this.client.onSend(JSON.stringify({name, iden: test.iden, user: test.user, status: 'sub'}))
-                }
-                return test.iden
-            } else {
-                if(test.user === this._user){
-                    await dataTab.delete(prop)
-                    // this.emit('sub', test.iden)
-                    this.client.onSend(JSON.stringify({name, iden: test.iden, user: test.user, status: 'sub'}))
-                    return test.iden
-                } else {
-                    throw new Error('user does not match')
-                }
-            }
-        }
+        // const subs = async (name, prop) => {
+        //     const dataTab = this.db.table(name)
+        //     const test = await dataTab.get(prop)
+        //     if(!test){
+        //         throw new Error('did not find data')
+        //     }
+        //     if(this._force){
+        //         await dataTab.delete(prop)
+        //         // this.emit('sub', test.iden)
+        //         if(test.user === this._user){
+        //             this.client.onSend(JSON.stringify({name, iden: test.iden, user: test.user, status: 'sub'}))
+        //         }
+        //         return test.iden
+        //     } else {
+        //         if(test.user === this._user){
+        //             await dataTab.delete(prop)
+        //             // this.emit('sub', test.iden)
+        //             this.client.onSend(JSON.stringify({name, iden: test.iden, user: test.user, status: 'sub'}))
+        //             return test.iden
+        //         } else {
+        //             throw new Error('user does not match')
+        //         }
+        //     }
+        // }
 
-        const clears = async (name) => {
-            const dataTab = this.db.table(name)
-            await dataTab.clear()
-        }
+        // const clears = async (name) => {
+        //     const dataTab = this.db.table(name)
+        //     await dataTab.clear()
+        // }
 
-        const tables = (name) => {
-            return this.db.table(name)
-        }
+        // const tables = (name) => {
+        //     return this.db.table(name)
+        // }
 
         this._routine = setInterval(() => {
             this._adds.clear()
@@ -278,66 +278,70 @@ export default class Base extends EventEmitter {
 
     id(){return crypto.randomUUID()}
 
-    // async ret(name, prop){
-    //     const dataTab = this.db.table(name)
-    //     return await dataTab.get(prop)
-    // }
+    async ret(name, prop){
+        const dataTab = this.db.table(name)
+        return await dataTab.get(prop)
+    }
 
-    // async add(name, data){
-    //     const dataTab = this.db.table(name)
-    //     data.stamp = data.stamp || Date.now()
-    //     data.user = data.user || this._user
-    //     data.iden = data.iden || crypto.randomUUID()
-    //     data.edit = 0
-    //     const test = await dataTab.add(data)
-    //     // this.emit('add', test)
-    //     this.client.onSend(JSON.stringify({name, data, user: data.user, stamp: data.stamp, iden: test, status: 'add'}))
-    //     return test
-    // }
+    async add(name, data){
+        const dataTab = this.db.table(name)
+        data.stamp = data.stamp || Date.now()
+        data.user = data.user || this._user
+        data.iden = data.iden || crypto.randomUUID()
+        data.edit = 0
+        const test = await dataTab.add(data)
+        // this.emit('add', test)
+        this.client.onSend(JSON.stringify({name, data, user: data.user, stamp: data.stamp, iden: test, status: 'add'}))
+        return test
+    }
 
-    // async edit(name, prop, data){
-    //     const dataTab = this.db.table(name)
-    //     const test = await dataTab.get(prop)
-    //     if((test && test.user === this._user) && (!data.user || data.user === this._user)){
-    //         data.edit = Date.now()
-    //         const num = await dataTab.update(prop, data)
-    //         // this.emit('edit', test.iden)
-    //         this.client.onSend(JSON.stringify({name, data, iden: test.iden, user: test.user, edit: data.edit, num, status: 'edit'}))
-    //         return test.iden
-    //     } else {
-    //         throw new Error('user does not match')
-    //     }
-    // }
+    async edit(name, prop, data){
+        const dataTab = this.db.table(name)
+        const test = await dataTab.get(prop)
+        if((test && test.user === this._user) && (!data.user || data.user === this._user)){
+            data.edit = Date.now()
+            const num = await dataTab.update(prop, data)
+            // this.emit('edit', test.iden)
+            this.client.onSend(JSON.stringify({name, data, iden: test.iden, user: test.user, edit: data.edit, num, status: 'edit'}))
+            return test.iden
+        } else {
+            throw new Error('user does not match')
+        }
+    }
 
-    // async sub(name, prop){
-    //     const dataTab = this.db.table(name)
-    //     const test = await dataTab.get(prop)
-    //     if(!test){
-    //         throw new Error('did not find data')
-    //     }
-    //     if(this._force){
-    //         await dataTab.delete(prop)
-    //         // this.emit('sub', test.iden)
-    //         if(test.user === this._user){
-    //             this.client.onSend(JSON.stringify({name, iden: test.iden, user: test.user, status: 'sub'}))
-    //         }
-    //         return test.iden
-    //     } else {
-    //         if(test.user === this._user){
-    //             await dataTab.delete(prop)
-    //             // this.emit('sub', test.iden)
-    //             this.client.onSend(JSON.stringify({name, iden: test.iden, user: test.user, status: 'sub'}))
-    //             return test.iden
-    //         } else {
-    //             throw new Error('user does not match')
-    //         }
-    //     }
-    // }
+    async sub(name, prop){
+        const dataTab = this.db.table(name)
+        const test = await dataTab.get(prop)
+        if(!test){
+            throw new Error('did not find data')
+        }
+        if(this._force){
+            await dataTab.delete(prop)
+            // this.emit('sub', test.iden)
+            if(test.user === this._user){
+                this.client.onSend(JSON.stringify({name, iden: test.iden, user: test.user, status: 'sub'}))
+            }
+            return test.iden
+        } else {
+            if(test.user === this._user){
+                await dataTab.delete(prop)
+                // this.emit('sub', test.iden)
+                this.client.onSend(JSON.stringify({name, iden: test.iden, user: test.user, status: 'sub'}))
+                return test.iden
+            } else {
+                throw new Error('user does not match')
+            }
+        }
+    }
 
-    // async clear(name){
-    //     const dataTab = this.db.table(name)
-    //     await dataTab.clear()
-    // }
+    async clear(name){
+        const dataTab = this.db.table(name)
+        await dataTab.clear()
+    }
+
+    table(name){
+        return this.db.table(name)
+    }
 
     quit(){
         clearInterval(this._routine)
