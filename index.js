@@ -56,122 +56,123 @@ export default class Base extends EventEmitter {
             }
             this.#subs.clear()
         }, this.timer.redo)
-    }
 
-    #routine
-    #adds = new Set()
-    #edits = new Map()
-    #subs = new Set()
+        this.#adds = new Set()
+        this.#edits = new Map()
+        this.#subs = new Set()
 
-    async #message(data, nick){
-        try {
-            if(this.debug){
-                console.log('Received Message: ', typeof(data), data)
-            }
-
-            const datas = JSON.parse(data)
-
-            const dataTab = this.db.table(datas.name)
-
-            if(dataTab){
-                if(datas.status){
-                    if(datas.user === this.user){
-                        return
-                    }
-                    if(datas.status === 'add'){
-                        if(this.#adds.has(datas.iden)){
+        this.#message = async (data, nick) => {
+            try {
+                if(this.debug){
+                    console.log('Received Message: ', typeof(data), data)
+                }
+    
+                const datas = JSON.parse(data)
+    
+                const dataTab = this.db.table(datas.name)
+    
+                if(dataTab){
+                    if(datas.status){
+                        if(datas.user === this.user){
                             return
                         }
-                        await dataTab.add(datas.data)
-                        this.emit('add', datas.iden)
-                        this.#adds.add(datas.iden)
-                        this.client.onMesh(data, nick)
-                    } else if(datas.status === 'edit'){
-                        if(this.#edits.has(datas.iden)){
-                            const test = this.#edits.get(datas.iden)
-                            if(datas.edit > test){
+                        if(datas.status === 'add'){
+                            if(this.#adds.has(datas.iden)){
+                                return
+                            }
+                            await dataTab.add(datas.data)
+                            this.emit('add', datas.iden)
+                            this.#adds.add(datas.iden)
+                            this.client.onMesh(data, nick)
+                        } else if(datas.status === 'edit'){
+                            if(this.#edits.has(datas.iden)){
+                                const test = this.#edits.get(datas.iden)
+                                if(datas.edit > test){
+                                    await dataTab.update(datas.iden, datas.data)
+                                    this.emit('edit', datas.iden)
+                                    this.#edits.set(datas.iden, datas.edit)
+                                    this.client.onMesh(data, nick)
+                                } else {
+                                    return
+                                }
+                            } else {
                                 await dataTab.update(datas.iden, datas.data)
                                 this.emit('edit', datas.iden)
                                 this.#edits.set(datas.iden, datas.edit)
                                 this.client.onMesh(data, nick)
-                            } else {
+                            }
+                        } else if(datas.status === 'sub'){
+                            if(this.#subs.has(datas.iden)){
                                 return
                             }
-                        } else {
-                            await dataTab.update(datas.iden, datas.data)
-                            this.emit('edit', datas.iden)
-                            this.#edits.set(datas.iden, datas.edit)
+                            if(!this.keep){
+                                await dataTab.delete(datas.iden)
+                                this.emit('sub', datas.iden)
+                            }
+                            this.#subs.add(datas.iden)
                             this.client.onMesh(data, nick)
-                        }
-                    } else if(datas.status === 'sub'){
-                        if(this.#subs.has(datas.iden)){
+                        } else {
                             return
                         }
-                        if(!this.keep){
-                            await dataTab.delete(datas.iden)
-                            this.emit('sub', datas.iden)
-                        }
-                        this.#subs.add(datas.iden)
-                        this.client.onMesh(data, nick)
-                    } else {
-                        return
-                    }
-                } else if(datas.session){
-                    if(datas.session === 'request'){
-                        let stamp
-                        let edit
-                        try {
-                            stamp = datas.stamp ? await dataTab.where('stamp').above(datas.stamp).toArray() : await dataTab.where('stamp').toArray()
-                        } catch {
-                            stamp = []
-                        }
-                        while(stamp.length){
-                            datas.session = 'response'
-                            datas.edit = null
-                            datas.stamp = stamp.splice(stamp.length - 50, 50)
-                            this.client.onSend(JSON.stringify(datas), nick)
-                        }
-                        try {
-                            edit = datas.edit ? await dataTab.where('edit').above(datas.edit).toArray() : await dataTab.where('edit').toArray()
-                        } catch {
-                            edit = []
-                        }
-                        while(edit.length){
-                            datas.session = 'response'
-                            datas.stamp = null
-                            datas.edit = edit.splice(edit.length - 50, 50)
-                            this.client.onSend(JSON.stringify(datas), nick)
-                        }
-                    } else if(datas.session === 'response'){
-                        if(datas.stamp){
-                            let hasStamp
+                    } else if(datas.session){
+                        if(datas.session === 'request'){
+                            let stamp
+                            let edit
                             try {
-                                hasStamp = await dataTab.where('stamp').notEqual(0).last()
+                                stamp = datas.stamp ? await dataTab.where('stamp').above(datas.stamp).toArray() : await dataTab.where('stamp').toArray()
                             } catch {
-                                hasStamp = {}
+                                stamp = []
                             }
-                            const stamps = hasStamp?.stamp ? datas.stamp.filter((e) => {return e.stamp > hasStamp.stamp && e.user !== this.user}) : datas.stamp
-                            try {
-                                await dataTab.bulkPut(stamps)
-                            } catch (error) {
-                                console.error(error)
+                            while(stamp.length){
+                                datas.session = 'response'
+                                datas.edit = null
+                                datas.stamp = stamp.splice(stamp.length - 50, 50)
+                                this.client.onSend(JSON.stringify(datas), nick)
                             }
-                            this.emit('bulk', stamps.map((data) => {return data.iden}))
-                        }
-                        if(datas.edit){
-                            let hasEdit
                             try {
-                                hasEdit = await dataTab.where('edit').notEqual(0).last()
+                                edit = datas.edit ? await dataTab.where('edit').above(datas.edit).toArray() : await dataTab.where('edit').toArray()
                             } catch {
-                                hasEdit = {}
+                                edit = []
                             }
-                            const edits = hasEdit?.edit ? datas.edit.filter((e) => {return e.edit > hasEdit.edit && e.user !== this.user}) : datas.edit
-                            try {
-                                await dataTab.bulkPut(edits)
-                            } catch (error) {
-                                console.error(error)
+                            while(edit.length){
+                                datas.session = 'response'
+                                datas.stamp = null
+                                datas.edit = edit.splice(edit.length - 50, 50)
+                                this.client.onSend(JSON.stringify(datas), nick)
                             }
-                            this.emit('bulk', edits.map((data) => {return data.iden}))
+                        } else if(datas.session === 'response'){
+                            if(datas.stamp){
+                                let hasStamp
+                                try {
+                                    hasStamp = await dataTab.where('stamp').notEqual(0).last()
+                                } catch {
+                                    hasStamp = {}
+                                }
+                                const stamps = hasStamp?.stamp ? datas.stamp.filter((e) => {return e.stamp > hasStamp.stamp && e.user !== this.user}) : datas.stamp
+                                try {
+                                    await dataTab.bulkPut(stamps)
+                                } catch (error) {
+                                    console.error(error)
+                                }
+                                this.emit('bulk', stamps.map((data) => {return data.iden}))
+                            }
+                            if(datas.edit){
+                                let hasEdit
+                                try {
+                                    hasEdit = await dataTab.where('edit').notEqual(0).last()
+                                } catch {
+                                    hasEdit = {}
+                                }
+                                const edits = hasEdit?.edit ? datas.edit.filter((e) => {return e.edit > hasEdit.edit && e.user !== this.user}) : datas.edit
+                                try {
+                                    await dataTab.bulkPut(edits)
+                                } catch (error) {
+                                    console.error(error)
+                                }
+                                this.emit('bulk', edits.map((data) => {return data.iden}))
+                            }
+                        } else {
+                            return
                         }
                     } else {
                         return
@@ -179,41 +180,45 @@ export default class Base extends EventEmitter {
                 } else {
                     return
                 }
-            } else {
+            } catch {
                 return
             }
-        } catch {
-            return
+        }
+        this.#disconnect = (chan) => {
+            console.log('disconnected: ' + chan)
+        }
+        this.#err = (e, chan) => {
+            console.error(e, chan)
+        }
+        this.#connect = (chan) => {
+            console.log('connected: ' + chan)
+    
+            this.db.tables.forEach(async (table) => {
+                let useStamp
+                let useEdit
+                try {
+                    useStamp = await table.where('stamp').notEqual(0).last()
+                } catch {
+                    useStamp = {}
+                }
+                try {
+                    useEdit = await table.where('edit').notEqual(0).last()
+                } catch {
+                    useEdit = {}
+                }
+                this.client.onSend(JSON.stringify({name: table.name, stamp: useStamp?.stamp, edit: useEdit?.edit, session: 'request'}), chan)
+            })
         }
     }
 
-    #disconnect(chan){
-        console.log('disconnected: ' + chan)
-    }
-
-    #err(e, chan){
-        console.error(e, chan)
-    }
-
-    #connect(chan){
-        console.log('connected: ' + chan)
-
-        this.db.tables.forEach(async (table) => {
-            let useStamp
-            let useEdit
-            try {
-                useStamp = await table.where('stamp').notEqual(0).last()
-            } catch {
-                useStamp = {}
-            }
-            try {
-                useEdit = await table.where('edit').notEqual(0).last()
-            } catch {
-                useEdit = {}
-            }
-            this.client.onSend(JSON.stringify({name: table.name, stamp: useStamp?.stamp, edit: useEdit?.edit, session: 'request'}), chan)
-        })
-    }
+    #routine
+    #adds
+    #edits
+    #subs
+    #message
+    #disconnect
+    #err
+    #connect
 
     id(){return crypto.randomUUID()}
 
