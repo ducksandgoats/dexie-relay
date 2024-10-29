@@ -46,21 +46,22 @@ export default class Base extends EventEmitter {
         this.client.on('error', this.#err)
         this.client.on('disconnect', this.#disconnect)
         this.client.on('message', this.#message)
+
+        this.#routine = setInterval(() => {
+            this.#adds.clear()
+            for(const [prop, update] of this.#edits.entries()){
+                if((Date.now() - update) > this.timer.expire){
+                    this.#edits.delete(prop)
+                }
+            }
+            this.#subs.clear()
+        }, this.timer.redo)
     }
 
+    #routine
     #adds = new Set()
     #edits = new Map()
     #subs = new Set()
-
-    #routine = setInterval(() => {
-        this.#adds.clear()
-        for(const [prop, update] of this.#edits.entries()){
-            if((Date.now() - update) > this.timer.expire){
-                this.#edits.delete(prop)
-            }
-        }
-        this.#subs.clear()
-    }, this.timer.redo)
 
     async #message(data, nick){
         try {
