@@ -10,6 +10,10 @@ export default class Base extends EventEmitter {
         this.force = opts.force === false ? opts.force : true
     
         this.keep = opts.keep === true ? opts.keep : false
+
+        this.timer = typeof(opts.timer) === 'object' && !Array.isArray(opts.timer) ? opts.timer : {}
+        this.timer.redo = this.timer.redo || 180000
+        this.timer.expire = this.timer.expire || 300000
     
         this.user = localStorage.getItem('user') || (() => {const test = crypto.randomUUID();localStorage.setItem('user', test);return test;})()
         
@@ -37,26 +41,26 @@ export default class Base extends EventEmitter {
             console.log('name', this.db.name)
         }
         this.db.version(opts.version).stores(opts.schema)
-    
-        this.adds = new Set()
-        this.edits = new Map()
-        this.subs = new Set()
-    
-        this.routine = setInterval(() => {
-            this.adds.clear()
-            for(const [prop, update] of this.edits.entries()){
-                if((Date.now() - update) > 300000){
-                    this.edits.delete(prop)
-                }
-            }
-            this.subs.clear()
-        }, 180000)
 
         this.client.on('connect', this.#connect)
         this.client.on('error', this.#err)
         this.client.on('disconnect', this.#disconnect)
         this.client.on('message', this.#message)
     }
+
+    #adds = new Set()
+    #edits = new Map()
+    #subs = new Set()
+
+    #routine = setInterval(() => {
+        this.#adds.clear()
+        for(const [prop, update] of this.#edits.entries()){
+            if((Date.now() - update) > this.timer.expire){
+                this.#edits.delete(prop)
+            }
+        }
+        this.#subs.clear()
+    }, this.timer.redo)
 
     async #message(data, nick){
         try {
@@ -74,20 +78,20 @@ export default class Base extends EventEmitter {
                         return
                     }
                     if(datas.status === 'add'){
-                        if(this.adds.has(datas.iden)){
+                        if(this.#adds.has(datas.iden)){
                             return
                         }
                         await dataTab.add(datas.data)
                         this.emit('add', datas.iden)
-                        this.adds.add(datas.iden)
+                        this.#adds.add(datas.iden)
                         this.client.onMesh(data, nick)
                     } else if(datas.status === 'edit'){
-                        if(this.edits.has(datas.iden)){
-                            const test = this.edits.get(datas.iden)
+                        if(this.#edits.has(datas.iden)){
+                            const test = this.#edits.get(datas.iden)
                             if(datas.edit > test){
                                 await dataTab.update(datas.iden, datas.data)
                                 this.emit('edit', datas.iden)
-                                this.edits.set(datas.iden, datas.edit)
+                                this.#edits.set(datas.iden, datas.edit)
                                 this.client.onMesh(data, nick)
                             } else {
                                 return
@@ -95,18 +99,18 @@ export default class Base extends EventEmitter {
                         } else {
                             await dataTab.update(datas.iden, datas.data)
                             this.emit('edit', datas.iden)
-                            this.edits.set(datas.iden, datas.edit)
+                            this.#edits.set(datas.iden, datas.edit)
                             this.client.onMesh(data, nick)
                         }
                     } else if(datas.status === 'sub'){
-                        if(this.subs.has(datas.iden)){
+                        if(this.#subs.has(datas.iden)){
                             return
                         }
                         if(!this.keep){
                             await dataTab.delete(datas.iden)
                             this.emit('sub', datas.iden)
                         }
-                        this.subs.add(datas.iden)
+                        this.#subs.add(datas.iden)
                         this.client.onMesh(data, nick)
                     } else {
                         return
@@ -297,8 +301,10 @@ export default class Base extends EventEmitter {
     }
 
     quit(){
-        clearInterval(this.routine)
-        this.edits.clear()
+        clearInterval(this.#routine)
+        this.#adds.clear()
+        this.#edits.clear()
+        this.#subs.clear()
         this.client.off('connect', this.#connect)
         this.client.off('error', this.#err)
         this.client.off('message', this.#message)
