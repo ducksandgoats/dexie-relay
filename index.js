@@ -5,17 +5,17 @@ import {EventEmitter} from 'events'
 export default class Base extends EventEmitter {
     constructor(opts){
         super()
-        this.debug = opts.debug
+        this._debug = opts.debug
 
-        this.force = opts.force === false ? opts.force : true
+        this._force = opts.force === false ? opts.force : true
     
-        this.keep = opts.keep === true ? opts.keep : false
+        this._keep = opts.keep === true ? opts.keep : false
 
-        this.timer = typeof(opts.timer) === 'object' && !Array.isArray(opts.timer) ? opts.timer : {}
-        this.timer.redo = this.timer.redo || 180000
-        this.timer.expire = this.timer.expire || 300000
+        this._timer = typeof(opts.timer) === 'object' && !Array.isArray(opts.timer) ? opts.timer : {}
+        this._timer.redo = this._timer.redo || 180000
+        this._timer.expire = this._timer.expire || 300000
     
-        this.user = localStorage.getItem('user') || (() => {const test = crypto.randomUUID();localStorage.setItem('user', test);return test;})()
+        this._user = localStorage.getItem('user') || (() => {const test = crypto.randomUUID();localStorage.setItem('user', test);return test;})()
         
         this.client = new Client(opts.url, opts.hash, opts.rtor)
     
@@ -37,33 +37,28 @@ export default class Base extends EventEmitter {
         }
         
         this.db = new Dexie(opts.name, {})
-        if(this.debug){
+        if(this._debug){
             console.log('name', this.db.name)
         }
         this.db.version(opts.version).stores(opts.schema)
 
-        this.client.on('connect', this.#connect)
-        this.client.on('error', this.#err)
-        this.client.on('disconnect', this.#disconnect)
-        this.client.on('message', this.#message)
-
-        this.#routine = setInterval(() => {
-            this.#adds.clear()
-            for(const [prop, update] of this.#edits.entries()){
-                if((Date.now() - update) > this.timer.expire){
-                    this.#edits.delete(prop)
+        this._routine = setInterval(() => {
+            this._adds.clear()
+            for(const [prop, update] of this._edits.entries()){
+                if((Date.now() - update) > this._timer.expire){
+                    this._edits.delete(prop)
                 }
             }
-            this.#subs.clear()
-        }, this.timer.redo)
+            this._subs.clear()
+        }, this._timer.redo)
 
-        this.#adds = new Set()
-        this.#edits = new Map()
-        this.#subs = new Set()
+        this._adds = new Set()
+        this._edits = new Map()
+        this._subs = new Set()
 
-        this.#message = async (data, nick) => {
+        this._message = async (data, nick) => {
             try {
-                if(this.debug){
+                if(this._debug){
                     console.log('Received Message: ', typeof(data), data)
                 }
     
@@ -73,24 +68,24 @@ export default class Base extends EventEmitter {
     
                 if(dataTab){
                     if(datas.status){
-                        if(datas.user === this.user){
+                        if(datas.user === this._user){
                             return
                         }
                         if(datas.status === 'add'){
-                            if(this.#adds.has(datas.iden)){
+                            if(this._adds.has(datas.iden)){
                                 return
                             }
                             await dataTab.add(datas.data)
                             this.emit('add', datas.iden)
-                            this.#adds.add(datas.iden)
+                            this._adds.add(datas.iden)
                             this.client.onMesh(data, nick)
                         } else if(datas.status === 'edit'){
-                            if(this.#edits.has(datas.iden)){
-                                const test = this.#edits.get(datas.iden)
+                            if(this._edits.has(datas.iden)){
+                                const test = this._edits.get(datas.iden)
                                 if(datas.edit > test){
                                     await dataTab.update(datas.iden, datas.data)
                                     this.emit('edit', datas.iden)
-                                    this.#edits.set(datas.iden, datas.edit)
+                                    this._edits.set(datas.iden, datas.edit)
                                     this.client.onMesh(data, nick)
                                 } else {
                                     return
@@ -98,18 +93,18 @@ export default class Base extends EventEmitter {
                             } else {
                                 await dataTab.update(datas.iden, datas.data)
                                 this.emit('edit', datas.iden)
-                                this.#edits.set(datas.iden, datas.edit)
+                                this._edits.set(datas.iden, datas.edit)
                                 this.client.onMesh(data, nick)
                             }
                         } else if(datas.status === 'sub'){
-                            if(this.#subs.has(datas.iden)){
+                            if(this._subs.has(datas.iden)){
                                 return
                             }
-                            if(!this.keep){
+                            if(!this._keep){
                                 await dataTab.delete(datas.iden)
                                 this.emit('sub', datas.iden)
                             }
-                            this.#subs.add(datas.iden)
+                            this._subs.add(datas.iden)
                             this.client.onMesh(data, nick)
                         } else {
                             return
@@ -148,7 +143,7 @@ export default class Base extends EventEmitter {
                                 } catch {
                                     hasStamp = {}
                                 }
-                                const stamps = hasStamp?.stamp ? datas.stamp.filter((e) => {return e.stamp > hasStamp.stamp && e.user !== this.user}) : datas.stamp
+                                const stamps = hasStamp?.stamp ? datas.stamp.filter((e) => {return e.stamp > hasStamp.stamp && e.user !== this._user}) : datas.stamp
                                 try {
                                     await dataTab.bulkPut(stamps)
                                 } catch (error) {
@@ -163,7 +158,7 @@ export default class Base extends EventEmitter {
                                 } catch {
                                     hasEdit = {}
                                 }
-                                const edits = hasEdit?.edit ? datas.edit.filter((e) => {return e.edit > hasEdit.edit && e.user !== this.user}) : datas.edit
+                                const edits = hasEdit?.edit ? datas.edit.filter((e) => {return e.edit > hasEdit.edit && e.user !== this._user}) : datas.edit
                                 try {
                                     await dataTab.bulkPut(edits)
                                 } catch (error) {
@@ -184,13 +179,13 @@ export default class Base extends EventEmitter {
                 return
             }
         }
-        this.#disconnect = (chan) => {
+        this._disconnect = (chan) => {
             console.log('disconnected: ' + chan)
         }
-        this.#err = (e, chan) => {
+        this._err = (e, chan) => {
             console.error(e, chan)
         }
-        this.#connect = (chan) => {
+        this._connect = (chan) => {
             console.log('connected: ' + chan)
     
             this.db.tables.forEach(async (table) => {
@@ -209,16 +204,12 @@ export default class Base extends EventEmitter {
                 this.client.onSend(JSON.stringify({name: table.name, stamp: useStamp?.stamp, edit: useEdit?.edit, session: 'request'}), chan)
             })
         }
-    }
 
-    #routine
-    #adds
-    #edits
-    #subs
-    #message
-    #disconnect
-    #err
-    #connect
+        this.client.on('connect', this._connect)
+        this.client.on('error', this._err)
+        this.client.on('disconnect', this._disconnect)
+        this.client.on('message', this._message)
+    }
 
     id(){return crypto.randomUUID()}
 
@@ -239,7 +230,7 @@ export default class Base extends EventEmitter {
         const dataTab = this.db.table(name)
         if(dataTab){
             data.stamp = data.stamp || Date.now()
-            data.user = data.user || this.user
+            data.user = data.user || this._user
             data.iden = data.iden || crypto.randomUUID()
             data.edit = 0
             const test = await dataTab.add(data)
@@ -255,7 +246,7 @@ export default class Base extends EventEmitter {
         const dataTab = this.db.table(name)
         if(dataTab){
             const test = await dataTab.get(prop)
-            if((test && test.user === this.user) && (!data.user || data.user === this.user)){
+            if((test && test.user === this._user) && (!data.user || data.user === this._user)){
                 data.edit = Date.now()
                 const num = await dataTab.update(prop, data)
                 // this.emit('edit', test.iden)
@@ -274,15 +265,15 @@ export default class Base extends EventEmitter {
         if(dataTab){
             const test = await dataTab.get(prop)
             if(test){
-                if(this.force){
+                if(this._force){
                     await dataTab.delete(prop)
                     // this.emit('sub', test.iden)
-                    if(test.user === this.user){
+                    if(test.user === this._user){
                         this.client.onSend(JSON.stringify({name, iden: test.iden, user: test.user, status: 'sub'}))
                     }
                     return test.iden
                 } else {
-                    if(test.user === this.user){
+                    if(test.user === this._user){
                         await dataTab.delete(prop)
                         // this.emit('sub', test.iden)
                         this.client.onSend(JSON.stringify({name, iden: test.iden, user: test.user, status: 'sub'}))
@@ -307,14 +298,14 @@ export default class Base extends EventEmitter {
     }
 
     quit(){
-        clearInterval(this.#routine)
-        this.#adds.clear()
-        this.#edits.clear()
-        this.#subs.clear()
-        this.client.off('connect', this.#connect)
-        this.client.off('error', this.#err)
-        this.client.off('message', this.#message)
-        this.client.off('disconnect', this.#disconnect)
+        clearInterval(this._routine)
+        this._adds.clear()
+        this._edits.clear()
+        this._subs.clear()
+        this.client.off('connect', this._connect)
+        this.client.off('error', this._err)
+        this.client.off('message', this._message)
+        this.client.off('disconnect', this._disconnect)
         this.client.end()
         this.db.close()
     }
