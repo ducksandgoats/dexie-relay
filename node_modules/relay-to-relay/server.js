@@ -19,7 +19,6 @@ import crypto from 'crypto'
  * @param {Array|String}  opts.hashes     join the relays for these hashes, array of hashes or comma separated string of hashes
  * @param {Object} opts.limit       limit the connections of the relay and the hashes
  * @param {Boolean}  opts.init    automatically start once instantiated
- * @param {Boolean}  opts.relay    if automatically started, this also start the dht listener for connections
  * @param {String}  opts.server    ip of the server
  * @param {Boolean}  opts.ws    options for WebSocket Server
  */
@@ -37,11 +36,17 @@ export default class Server extends Events {
         // this.test = '0'
         // this.offer = null
         this.dev = Boolean(opts.dev)
-        this.useInit = opts.init === false ? opts.init : true
-        this.useRelay = opts.relay === true ? opts.relay : false
+        this.init = opts.init === false ? opts.init : true
         this.limit = typeof(opts.limit) === 'object' && !Array.isArray(opts.limit) ? opts.limit : {}
         this.limit.serverConnections = this.limit.serverConnections || 0
         this.limit.clientConnections = this.limit.clientConnections || 0
+        this.timer = typeof(opts.timer) === 'object' && !Array.isArray(opts.timer) ? opts.timer : {}
+        this.timer.webOne = this.timer.webOne || 45000
+        this.timer.webTwo = this.timer.webTwo || 30000
+        this.timer.webThree = this.timer.webThree || 45000
+        this.timer.check = this.timer.check || 60000
+        this.timer.talking = this.timer.talking || 1800000
+        this.timer.redo = this.timer.redo || 300000
         this.http = null
         this.ws = null
         this.domain = opts.domain
@@ -98,7 +103,7 @@ export default class Server extends Events {
           this.servers.forEach((data) => {data.send(JSON.stringify({action: 'off'}))})
           this.triedAlready.clear()
           this.emit('stop', 'http')
-          setTimeout(() => {this.http.listen(this.port, this.host)}, 300000)
+          setTimeout(() => {this.http.listen(this.port, this.host)}, this.timer.redo)
         }
         // this.http.handleListeners = () => {
         //   this.http.off('error', this.http.onError)
@@ -301,8 +306,8 @@ export default class Server extends Events {
             return
           }
         }
-        if(this.useInit){
-          this.start(this.useRelay)
+        if(this.init){
+          this.start()
         }
     }
 
@@ -619,10 +624,8 @@ export default class Server extends Events {
       this.relay.on('peer', this.relay.onPeer)
       this.relay.on('error', this.relay.onError)
       this.relay.on('close', this.relay.onClose)
-      if(this.useRelay){
-        if(!this.relay.listening){
-          this.relay.listen(this.port, this.server)
-        }
+      if(!this.relay.listening){
+        this.relay.listen(this.port, this.server)
       }
       this.ws.on('listening', this.ws.onListening)
       this.ws.on('connection', this.ws.onConnection)
@@ -656,19 +659,19 @@ export default class Server extends Events {
             // }
             if(test.wait === 1){
               if(test.stamp){
-                if((Date.now() - test.stamp) > 45000){
+                if((Date.now() - test.stamp) > this.timer.webOne){
                   test.close()
                 }
               }
             } else if(test.wait === 2){
               if(test.stamp){
-                if((Date.now() - test.stamp) > 30000){
+                if((Date.now() - test.stamp) > this.timer.webTwo){
                   test.close()
                 }
               }
             } else if(test.wait === 3){
               if(test.stamp){
-                if((Date.now() - test.stamp) > 45000){
+                if((Date.now() - test.stamp) > this.timer.webThree){
                   test.close()
                 }
               }
@@ -676,13 +679,13 @@ export default class Server extends Events {
               continue
             }
           }
-        }, 60000)
+        }, this.timer.check)
       }
 
       this.talk()
 
       if(!this.talking){
-        this.talking = setInterval(() => {this.talk()}, 1800000)
+        this.talking = setInterval(() => {this.talk()}, this.timer.talking)
       }
     }
     stop(){
@@ -702,10 +705,8 @@ export default class Server extends Events {
       this.relay.off('peer', this.relay.onPeer)
       this.relay.off('error', this.relay.onError)
       this.relay.off('close', this.relay.onClose)
-      if(this.useRelay){
-        if(this.relay.listening){
-          this.relay.destroy()
-        }
+      if(this.relay.listening){
+        this.relay.destroy()
       }
       if(this.check){
         clearInterval(this.check)
