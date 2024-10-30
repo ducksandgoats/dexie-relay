@@ -347,7 +347,10 @@ export default class Base extends EventEmitter {
                 if(this._sync === null){
                     try {
                         useStamp = await table.where('stamp').notEqual(0).last()
-                    } catch {
+                    } catch (err) {
+                        if(this._debug){
+                            console.error(err)
+                        }
                         useStamp = {}
                     }
                     if(useStamp?.stamp){
@@ -355,7 +358,10 @@ export default class Base extends EventEmitter {
                     }
                     try {
                         useEdit = await table.where('edit').notEqual(0).last()
-                    } catch {
+                    } catch (err) {
+                        if(this._debug){
+                            console.error(err)
+                        }
                         useEdit = {}
                     }
                     if(useEdit?.edit){
