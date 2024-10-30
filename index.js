@@ -7,7 +7,7 @@ export default class Base extends EventEmitter {
         super()
         this._debug = opts.debug
 
-        this._sync = opts.sync !== true && opts.sync !== null && opts.sync !== false ? null : opts.sync
+        this._sync = opts.sync === true || opts.sync === null || opts.sync === false ? opts.sync : null
 
         this._force = opts.force === false ? opts.force : true
     
