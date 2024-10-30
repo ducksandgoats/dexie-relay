@@ -181,14 +181,14 @@ export default class Base extends EventEmitter {
                     }
                 } else if(datas.session){
                     if(datas.session === 'request'){
-                        const stamps = await dataTab.where('stamp').toArray()
+                        const stamps = await dataTab.where('stamp').notEqual(0).toArray()
                         while(stamps.length){
                             datas.session = 'response'
                             datas.edits = null
                             datas.stamps = stamps.splice(stamps.length - 50, 50)
                             this.client.onSend(JSON.stringify(datas), nick)
                         }
-                        const edits = await dataTab.where('edit').toArray()
+                        const edits = await dataTab.where('edit').notEqual(0).toArray()
                         while(edits.length){
                             datas.session = 'response'
                             datas.stamps = null
