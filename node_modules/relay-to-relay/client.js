@@ -23,7 +23,7 @@ export default class Client extends Events {
         this.channels = new Map()
         this.tracks = new Set()
         this.socket = null
-        this.temp = new Map()
+        this.temps = new Map()
         this.routine = null
         this.status = true
         this.auto = opts.auto === false ? opts.auto : true
@@ -43,19 +43,19 @@ export default class Client extends Events {
         if(this.socket){
             this.socket.close()
         }
-        this.temp.forEach((data) => {
+        this.temps.forEach((data) => {
             if(this.channels.has(data.relay)){
                 this.channels.get(data.relay).send(JSON.stringify({...data, action: 'abort'}))
             }
         })
-        this.temp.clear()
+        this.temps.clear()
         this.channels.forEach((data) => {
             data.destroy()
         })
         this.channels.clear()
     }
     ws(amount){
-        const test = this.temp.size + this.channels.size
+        const test = this.temps.size + this.channels.size
         if(!(test < 6)){
             return
         }
@@ -306,28 +306,7 @@ export default class Client extends Events {
                 this.channels.delete(channel.id)
             }
             if(this.status){
-                const count = this.temp.size + this.channels.size
-                if(count < 1){
-                    this.ws(true)
-                } else if(count < 3){
-                    if(channel.ws){
-                        this.rtc()
-                    } else {
-                        if(channel.msg){
-                            if(this.channels.has(channel.msg.relay)){
-                                this.channels.get(channel.msg.relay).send(JSON.stringify({...channel.msg, action: 'abort'}))
-                            }
-                            delete channel.msg
-                            this.ws(false)
-                        } else {
-                            this.rtc()
-                        }
-                    }
-                } else {
-                    if(this.dev){
-                        console.log('already have at least 3 users')
-                    }
-                }
+                this.freshRelay(channel)
             }
             this.emit('disconnect', channel.id)
             // channel.emit('disconnected', channel)
@@ -398,9 +377,9 @@ export default class Client extends Events {
             }
             await this.dbDelete(test.id)
         } else {
-            if(this.temp.has(obj.id)){
-                this.temp.delete(obj.id)
-                if((this.temp.size + this.channels.size) < 6){
+            if(this.temps.has(obj.id)){
+                this.temps.delete(obj.id)
+                if((this.temps.size + this.channels.size) < 6){
                     this.rtc()
                 }
             } else if(this.id === obj.start){
@@ -429,11 +408,11 @@ export default class Client extends Events {
         }
     }
     async beforeSearch(obj, chan){
-        if(this.id === obj.start || this.temp.has(obj.id)){
+        if(this.id === obj.start || this.temps.has(obj.id)){
             obj.action = 'nonmsg'
             chan.send('trystereo:' + JSON.stringify(obj))
             return
-        } else if((this.channels.size + this.temp.size) < 6 && !this.channels.has(obj.start)){
+        } else if((this.channels.size + this.temps.size) < 6 && !this.channels.has(obj.start)){
             const testChannel = new Channel({...this.simple, initiator: true, trickle: false})
             new Promise((res) => {testChannel.once('signal', res)})
             .then((data) => {
@@ -519,9 +498,8 @@ export default class Client extends Events {
         }
     }
     async nonmsg(obj){
-        if(this.temp.has(obj.id)){
-            const chan = this.temp.get(obj.id)
-            const base = chan.msg
+        if(this.temps.has(obj.id)){
+            const base = this.temps.get(obj.id)
             const arr = []
             const list = new Set()
             for(const prop of this.channels.values()){
@@ -539,7 +517,7 @@ export default class Client extends Events {
                 base.relay = i.id
                 i.send('trystereo:' + JSON.stringify(obj))
             } else {
-                chan.destroy()
+                base.destroy()
                 return
             }
         } else {
@@ -596,10 +574,10 @@ export default class Client extends Events {
         }
     }
     async afterSearch(obj, chan){
-        if(this.id === obj.start && this.temp.has(obj.id)){
-            const tempChannel = this.temp.get(obj.id)
+        if(this.id === obj.start && this.temps.has(obj.id)){
+            const tempChannel = this.temps.get(obj.id)
             if(tempChannel.relay !== chan.id){
-                this.temp.delete(tempChannel.id)
+                this.temps.delete(tempChannel.id)
                 chan.send(JSON.stringify({...obj, action: 'abort'}))
                 return
             }
@@ -609,7 +587,7 @@ export default class Client extends Events {
                 testChannel.id = obj.stop
                 testChannel.msg = tempChannel
                 testChannel.msg.stop = obj.stop
-                this.temp.delete(tempChannel.id)
+                this.temps.delete(tempChannel.id)
                 testChannel.redo = true
                 testChannel.ws = false
                 testChannel.channels = new Set()
@@ -628,7 +606,7 @@ export default class Client extends Events {
             .catch((err) => {
                 this.emit('error', err)
                 testChannel.destroy()
-                this.temp.delete(tempChannel.id)
+                this.temps.delete(tempChannel.id)
                 chan.send(JSON.stringify({...obj, action: 'abort'}))
                 console.error(err)
             })
@@ -661,8 +639,16 @@ export default class Client extends Events {
         }
     }
     rtc(){
-        const test = {id: crypto.randomUUID(), tried: [], start: this.id}
-        this.temp.set(test.id, test)
+        const test = {id: crypto.randomUUID(), tried: [], start: this.id, another: (data) => {this.freshTemp(data)}, destroy: function(){
+            this.temps.delete(this.id)
+            // for(const p in this){
+            //     delete this[p]
+            // }
+            if(this.status){
+                this.another(this)
+            }
+        }}
+        this.temps.set(test.id, test)
 
         const arr = []
         const list = new Set()
@@ -681,7 +667,7 @@ export default class Client extends Events {
             test.relay = i.id
             i.send('trystereo:' + JSON.stringify(obj))
         } else {
-            this.temp.delete(test.id)
+            this.temps.delete(test.id)
             if(this.dev){
                 console.log('deleted temp obj')
             }
@@ -750,6 +736,45 @@ export default class Client extends Events {
                     const test = this.channels.get(obj.start)
                     delete test.msg
                 }
+            }
+        }
+    }
+
+    freshRelay(channel){
+        const count = this.temps.size + this.channels.size
+        if(count < 1){
+            this.ws(true)
+        } else if(count < 3){
+            if(!channel.ws){
+                if(channel.msg){
+                    if(this.channels.has(channel.msg.relay)){
+                        this.channels.get(channel.msg.relay).send(JSON.stringify({...channel.msg, action: 'abort'}))
+                    }
+                    delete channel.msg
+                }
+            }
+            this.ws(false)
+        } else if(count < 6){
+            this.rtc()
+        } else {
+            if(this.dev){
+                console.log('have 6 or more users')
+            }
+        }
+    }
+
+    freshTemp(base){
+        // this.temps.delete(base.id)
+        const count = this.temps.size + this.channels.size
+        if(count < 1){
+            this.ws(true)
+        } else if(count < 3){
+            this.ws(false)
+        } else if(count < 6){
+            this.rtc()
+        } else {
+            if(this.dev){
+                console.log('have 6 or more users')
             }
         }
     }
