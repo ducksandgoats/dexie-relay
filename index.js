@@ -7,6 +7,8 @@ export default class Base extends EventEmitter {
         super()
         this._debug = opts.debug
 
+        this._sync = opts.sync !== true && opts.sync !== null && opts.sync !== false ? null : opts.sync
+
         this._force = opts.force === false ? opts.force : true
     
         this._keep = opts.keep === true ? opts.keep : false
@@ -179,61 +181,129 @@ export default class Base extends EventEmitter {
                     }
                 } else if(datas.session){
                     if(datas.session === 'request'){
-                        let stamp
-                        let edit
-                        try {
-                            stamp = datas.stamp ? await dataTab.where('stamp').above(datas.stamp).toArray() : await dataTab.where('stamp').toArray()
-                        } catch {
-                            stamp = []
-                        }
-                        while(stamp.length){
+                        const stamps = await dataTab.where('stamp').toArray()
+                        const edits = await dataTab.where('edit').toArray()
+                        while(stamps.length){
                             datas.session = 'response'
-                            datas.edit = null
-                            datas.stamp = stamp.splice(stamp.length - 50, 50)
+                            datas.edits = null
+                            datas.stamps = stamps.splice(stamps.length - 50, 50)
                             this.client.onSend(JSON.stringify(datas), nick)
                         }
-                        try {
-                            edit = datas.edit ? await dataTab.where('edit').above(datas.edit).toArray() : await dataTab.where('edit').toArray()
-                        } catch {
-                            edit = []
-                        }
-                        while(edit.length){
+                        while(edits.length){
                             datas.session = 'response'
-                            datas.stamp = null
-                            datas.edit = edit.splice(edit.length - 50, 50)
+                            datas.stamps = null
+                            datas.edits = edits.splice(edits.length - 50, 50)
                             this.client.onSend(JSON.stringify(datas), nick)
                         }
                     } else if(datas.session === 'response'){
-                        if(datas.stamp){
-                            let hasStamp
-                            try {
-                                hasStamp = await dataTab.where('stamp').notEqual(0).last()
-                            } catch {
-                                hasStamp = {}
+                        if(datas.stamps){
+                            if(!datas.stamps.length){
+                                return
                             }
-                            const stamps = hasStamp?.stamp ? datas.stamp.filter((e) => {return e.stamp > hasStamp.stamp && e.user !== this._user}) : datas.stamp
-                            try {
-                                await dataTab.bulkPut(stamps)
-                            } catch (error) {
-                                console.error(error)
+                            const arr = []
+                            for(const data of datas.stamps){
+                                try {
+                                    await dataTab.add(data)
+                                    arr.push(data.iden)
+                                } catch {
+                                    continue
+                                }
                             }
-                            this.emit('bulk', stamps.map((data) => {return data.iden}))
+                            this.emit('bulk', arr)
                         }
-                        if(datas.edit){
-                            let hasEdit
-                            try {
-                                hasEdit = await dataTab.where('edit').notEqual(0).last()
-                            } catch {
-                                hasEdit = {}
+                        if(datas.edits){
+                            if(!datas.edits.length){
+                                return
                             }
-                            const edits = hasEdit?.edit ? datas.edit.filter((e) => {return e.edit > hasEdit.edit && e.user !== this._user}) : datas.edit
-                            try {
-                                await dataTab.bulkPut(edits)
-                            } catch (error) {
-                                console.error(error)
+                            const arr = []
+                            for(const data of datas.edits){
+                                try {
+                                    const got = await dataTab.get(data.iden)
+                                    if(got){
+                                        if(got.edit < data.edit){
+                                            await dataTab.put(data)
+                                            arr.push(data.iden)
+                                        }
+                                    } else {
+                                        await dataTab.add(data)
+                                        arr.push(data.iden)
+                                    }
+                                } catch {
+                                    continue
+                                }
                             }
-                            this.emit('bulk', edits.map((data) => {return data.iden}))
+                            this.emit('bulk', arr)
                         }
+                    } else if(datas.session === 'stamp'){
+                        let stamps
+                        if(datas.from && datas.to){
+                            stamps = await dataTab.where('stamp').between(datas.from, datas.to, true, true).toArray()
+                        } else if(datas.from){
+                            stamps = await dataTab.where('stamp').above(datas.from).toArray()
+                        } else if(datas.to){
+                            stamps = await dataTab.where('stamp').below(datas.to).toArray()
+                        } else {
+                            return
+                        }
+                        while(stamps.length){
+                            datas.session = 'stamps'
+                            datas.stamps = stamps.splice(stamps.length - 50, 50)
+                            datas.edits = null
+                            this.client.onSend(JSON.stringify(datas), nick)
+                        }
+                    } else if(datas.session === 'stamps'){
+                        if(!datas.stamps.length){
+                            return
+                        }
+                        const arr = []
+                        for(const data of datas.stamps){
+                            try {
+                                await dataTab.add(data)
+                                arr.push(data.iden)
+                            } catch {
+                                continue
+                            }
+                        }
+                        this.emit('bulk', arr)
+                    } else if(datas.session === 'edit'){
+                        let edits
+                        if(datas.from && datas.to){
+                            edits = await dataTab.where('stamp').between(datas.from, datas.to, true, true).toArray()
+                        } else if(datas.from){
+                            edits = await dataTab.where('stamp').above(datas.from).toArray()
+                        } else if(datas.to){
+                            edits = await dataTab.where('stamp').below(datas.to).toArray()
+                        } else {
+                            return
+                        }
+                        while(edits.length){
+                            datas.session = 'edits'
+                            datas.stamps = null
+                            datas.edits = edits.splice(edits.length - 50, 50)
+                            this.client.onSend(JSON.stringify(datas), nick)
+                        }
+                    } else if(datas.session === 'edits'){
+                        if(!datas.edits.length){
+                            return
+                        }
+                        const arr = []
+                        for(const data of datas.edits){
+                            try {
+                                const got = await dataTab.get(data.iden)
+                                if(got){
+                                    if(got.edit < data.edit){
+                                        await dataTab.put(data)
+                                        arr.push(data.iden)
+                                    }
+                                } else {
+                                    await dataTab.add(data)
+                                    arr.push(data.iden)
+                                }
+                            } catch {
+                                continue
+                            }
+                        }
+                        this.emit('bulk', arr)
                     } else {
                         return
                     }
@@ -256,17 +326,32 @@ export default class Base extends EventEmitter {
             this.db.tables.forEach(async (table) => {
                 let useStamp
                 let useEdit
-                try {
-                    useStamp = await table.where('stamp').notEqual(0).last()
-                } catch {
-                    useStamp = {}
+                if(this._sync === true){
+                    this.client.onSend(JSON.stringify({name: table.name, session: 'request'}), chan)
                 }
-                try {
-                    useEdit = await table.where('edit').notEqual(0).last()
-                } catch {
-                    useEdit = {}
+                if(this._sync === null){
+                    try {
+                        useStamp = await table.where('stamp').notEqual(0).last()
+                    } catch {
+                        useStamp = {}
+                    }
+                    if(useStamp?.stamp){
+                        this.client.onSend(JSON.stringify({name: table.name, from: useStamp.stamp, session: 'stamp'}), chan)
+                    }
+                    try {
+                        useEdit = await table.where('edit').notEqual(0).last()
+                    } catch {
+                        useEdit = {}
+                    }
+                    if(useEdit?.edit){
+                        this.client.onSend(JSON.stringify({name: table.name, from: useEdit.edit, session: 'edit'}), chan)
+                    }
                 }
-                this.client.onSend(JSON.stringify({name: table.name, stamp: useStamp?.stamp, edit: useEdit?.edit, session: 'request'}), chan)
+                if(this._sync === false){
+                    if(this._debug){
+                        console.log('not syncing')
+                    }
+                }
             })
         }
 
