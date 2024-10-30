@@ -639,15 +639,15 @@ export default class Client extends Events {
         }
     }
     rtc(){
-        const test = {id: crypto.randomUUID(), tried: [], start: this.id, another: (data) => {this.freshTemp(data)}, destroy: function(){
-            this.temps.delete(this.id)
-            // for(const p in this){
-            //     delete this[p]
-            // }
-            if(this.status){
-                this.another(this)
+        const test = {id: crypto.randomUUID(), tried: [], start: this.id}
+        test.destroy = () => {
+            if(this.temps.has(test.id)){
+                this.temps.delete(test.id)
             }
-        }}
+            if(this.status){
+                this.freshTemp(test)
+            }
+        }
         this.temps.set(test.id, test)
 
         const arr = []
@@ -774,7 +774,7 @@ export default class Client extends Events {
             this.rtc()
         } else {
             if(this.dev){
-                console.log('have 6 or more users')
+                console.log(base.id, 'have 6 or more users')
             }
         }
     }
