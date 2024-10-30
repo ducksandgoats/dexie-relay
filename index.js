@@ -205,7 +205,10 @@ export default class Base extends EventEmitter {
                                 try {
                                     await dataTab.add(data)
                                     arr.push(data.iden)
-                                } catch {
+                                } catch (err) {
+                                    if(this._debug){
+                                        console.error(err)
+                                    }
                                     continue
                                 }
                             }
@@ -228,7 +231,10 @@ export default class Base extends EventEmitter {
                                         await dataTab.add(data)
                                         arr.push(data.iden)
                                     }
-                                } catch {
+                                } catch (err) {
+                                    if(this._debug){
+                                        console.error(err)
+                                    }
                                     continue
                                 }
                             }
@@ -260,7 +266,10 @@ export default class Base extends EventEmitter {
                             try {
                                 await dataTab.add(data)
                                 arr.push(data.iden)
-                            } catch {
+                            } catch (err) {
+                                if(this._debug){
+                                    console.error(err)
+                                }
                                 continue
                             }
                         }
@@ -299,7 +308,10 @@ export default class Base extends EventEmitter {
                                     await dataTab.add(data)
                                     arr.push(data.iden)
                                 }
-                            } catch {
+                            } catch (err) {
+                                if(this._debug){
+                                    console.error(err)
+                                }
                                 continue
                             }
                         }
@@ -310,7 +322,10 @@ export default class Base extends EventEmitter {
                 } else {
                     return
                 }
-            } catch {
+            } catch (err) {
+                if(this._debug){
+                    console.error(err)
+                }
                 return
             }
         }
