@@ -203,8 +203,16 @@ export default class Base extends EventEmitter {
                             const arr = []
                             for(const data of datas.stamps){
                                 try {
-                                    await dataTab.add(data)
-                                    arr.push(data.iden)
+                                    const got = await dataTab.get(data.iden)
+                                    if(got){
+                                        if(got.edit < data.edit){
+                                            await dataTab.put(data)
+                                            arr.push(data.iden)
+                                        }
+                                    } else {
+                                        await dataTab.add(data)
+                                        arr.push(data.iden)
+                                    }
                                 } catch (err) {
                                     if(this._debug){
                                         console.error(err)
@@ -264,8 +272,16 @@ export default class Base extends EventEmitter {
                         const arr = []
                         for(const data of datas.stamps){
                             try {
-                                await dataTab.add(data)
-                                arr.push(data.iden)
+                                const got = await dataTab.get(data.iden)
+                                if(got){
+                                    if(got.edit < data.edit){
+                                        await dataTab.put(data)
+                                        arr.push(data.iden)
+                                    }
+                                } else {
+                                    await dataTab.add(data)
+                                    arr.push(data.iden)
+                                }
                             } catch (err) {
                                 if(this._debug){
                                     console.error(err)
