@@ -92,82 +92,81 @@ export default class Client extends Events {
             this.emit('open', e)
         }
         this.socket.handleMessage = (e) => {
-            let message
             try {
-                message = JSON.parse(e.data)
+                const message = JSON.parse(e.data)
                 if(this.dev){
                     console.log('websocket data', typeof(message), message)
+                }
+                if(message.action === 'error'){
+                    this.emit('error', message.error)
+                }
+                if(message.action === 'relay'){
+                    if(message.relay){
+                        this.url = message.relay
+                        this.socket.relay = true
+                        this.socket.close()
+                    }
+                }
+                if(message.action === 'interrupt'){
+                    if(this.channels.has(message.id)){
+                        const testChannel = this.channels.get(message.id)
+                        testChannel.destroy()
+                        this.channels.delete(message.id)
+                    }
+                }
+                if(message.action === 'init'){
+                    const testChannel = new Channel({...this.simple, initiator: true, trickle: false})
+                    new Promise((res) => {testChannel.once('signal', res)})
+                    .then((data) => {
+                        testChannel.id = message.res
+                        testChannel.redo = true
+                        testChannel.channels = new Set()
+                        testChannel.messages = new Set()
+                        testChannel.ws = true
+                        if(!this.channels.has(testChannel.id)){
+                            this.channels.set(testChannel.id, testChannel)
+                        }
+                        this.socket.send(JSON.stringify({...message, action: 'request', request: data}))
+                        this.handleChannel(testChannel)
+                    })
+                    .catch((err) => {
+                        testChannel.destroy()
+                        console.error(err)
+                    })
+                }
+                if(message.action === 'request'){
+                    const testChannel = new Channel({...this.simple, initiator: false, trickle: false})
+                    new Promise((res) => {testChannel.once('signal', res)})
+                    .then((data) => {
+                        testChannel.id = message.req
+                        testChannel.redo = true
+                        testChannel.channels = new Set()
+                        testChannel.messages = new Set()
+                        testChannel.ws = true
+                        if(!this.channels.has(testChannel.id)){
+                            this.channels.set(testChannel.id, testChannel)
+                        }
+                        delete message.request
+                        this.socket.send(JSON.stringify({...message, action: 'response', response: data}))
+                        this.handleChannel(testChannel)
+                    })
+                    .catch((err) => {
+                        testChannel.destroy()
+                        console.error(err)
+                    })
+                    testChannel.signal(message.request)
+                }
+                if(message.action === 'response'){
+                    if(this.channels.has(message.res)){
+                        const testChannel = this.channels.get(message.res)
+                        testChannel.signal(message.response)
+                        delete message.response
+                        this.socket.send(JSON.stringify({...message, action: 'proc'}))
+                    }
                 }
             } catch (error) {
                 this.emit('error', error)
                 return
-            }
-            if(message.action === 'error'){
-                this.emit('error', message.error)
-            }
-            if(message.action === 'relay'){
-                if(message.relay){
-                    this.url = message.relay
-                    this.socket.relay = true
-                    this.socket.close()
-                }
-            }
-            if(message.action === 'interrupt'){
-                if(this.channels.has(message.id)){
-                    const testChannel = this.channels.get(message.id)
-                    testChannel.destroy()
-                    this.channels.delete(message.id)
-                }
-            }
-            if(message.action === 'init'){
-                const testChannel = new Channel({...this.simple, initiator: true, trickle: false})
-                new Promise((res) => {testChannel.once('signal', res)})
-                .then((data) => {
-                    testChannel.id = message.res
-                    testChannel.redo = true
-                    testChannel.channels = new Set()
-                    testChannel.messages = new Set()
-                    testChannel.ws = true
-                    if(!this.channels.has(testChannel.id)){
-                        this.channels.set(testChannel.id, testChannel)
-                    }
-                    this.socket.send(JSON.stringify({...message, action: 'request', request: data}))
-                    this.handleChannel(testChannel)
-                })
-                .catch((err) => {
-                    testChannel.destroy()
-                    console.error(err)
-                })
-            }
-            if(message.action === 'request'){
-                const testChannel = new Channel({...this.simple, initiator: false, trickle: false})
-                new Promise((res) => {testChannel.once('signal', res)})
-                .then((data) => {
-                    testChannel.id = message.req
-                    testChannel.redo = true
-                    testChannel.channels = new Set()
-                    testChannel.messages = new Set()
-                    testChannel.ws = true
-                    if(!this.channels.has(testChannel.id)){
-                        this.channels.set(testChannel.id, testChannel)
-                    }
-                    delete message.request
-                    this.socket.send(JSON.stringify({...message, action: 'response', response: data}))
-                    this.handleChannel(testChannel)
-                })
-                .catch((err) => {
-                    testChannel.destroy()
-                    console.error(err)
-                })
-                testChannel.signal(message.request)
-            }
-            if(message.action === 'response'){
-                if(this.channels.has(message.res)){
-                    const testChannel = this.channels.get(message.res)
-                    testChannel.signal(message.response)
-                    delete message.response
-                    this.socket.send(JSON.stringify({...message, action: 'proc'}))
-                }
             }
         }
         this.socket.handleError = (e) => {
@@ -226,37 +225,42 @@ export default class Client extends Events {
             this.emit('connect', channel.id)
         }
         const onData = async (data) => {
-            data = new TextDecoder().decode(data)
-            if(this.dev){
-                console.log('webrtc data', typeof(data), data)
-            }
-            if(data.startsWith('trystereo:')){
-                data = JSON.parse(data.replace('trystereo:', ''))
-                if(data.action === 'add'){
-                    if(!channel.channels.has(data.add)){
-                        channel.channels.add(data.add)
-                    }
-                } else if(data.action === 'sub'){
-                    if(!channel.channels.has(data.sub)){
-                        channel.channels.add(data.sub)
-                    }
-                } else if(data.action === 'beforeSearch'){
-                    await this.beforeSearch(data, channel)
-                } else if(data.action === 'afterSearch'){
-                    await this.afterSearch(data, channel)
-                } else if(data.action === 'beforeSession'){
-                    await this.beforeSession(data, channel)
-                } else if(data.action === 'afterSession'){
-                    await this.afterSession(data, channel)
-                } else if(data.action === 'nonmsg'){
-                    await this.nonmsg(data)
-                } else if(data.action === 'abort'){
-                    await this.abortion(data, channel)
-                } else {
-                    this.emit('error', new Error('data is invalid'))
+            try {
+                data = new TextDecoder().decode(data)
+                if(this.dev){
+                    console.log('webrtc data', typeof(data), data)
                 }
-            } else {
-                this.emit('message', data, channel.id)
+                if(data.startsWith('trystereo:')){
+                    data = JSON.parse(data.replace('trystereo:', ''))
+                    if(data.action === 'add'){
+                        if(!channel.channels.has(data.add)){
+                            channel.channels.add(data.add)
+                        }
+                    } else if(data.action === 'sub'){
+                        if(!channel.channels.has(data.sub)){
+                            channel.channels.add(data.sub)
+                        }
+                    } else if(data.action === 'beforeSearch'){
+                        await this.beforeSearch(data, channel)
+                    } else if(data.action === 'afterSearch'){
+                        await this.afterSearch(data, channel)
+                    } else if(data.action === 'beforeSession'){
+                        await this.beforeSession(data, channel)
+                    } else if(data.action === 'afterSession'){
+                        await this.afterSession(data, channel)
+                    } else if(data.action === 'nonmsg'){
+                        await this.nonmsg(data)
+                    } else if(data.action === 'abort'){
+                        await this.abortion(data, channel)
+                    } else {
+                        this.emit('error', new Error('data is invalid'))
+                    }
+                } else {
+                    this.emit('message', data, channel.id)
+                }
+            } catch (error) {
+                this.emit('error', error)
+                return
             }
         }
         const onError = (err) => {

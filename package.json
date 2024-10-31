@@ -1,6 +1,6 @@
 {
   "name": "dexie-relay",
-  "version": "5.0.0",
+  "version": "5.0.1",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -12,6 +12,6 @@
   "dependencies": {
     "dexie": "^4.0.9",
     "events": "^3.3.0",
-    "relay-to-relay": "^1.0.9"
+    "relay-to-relay": "^2.0.0"
   }
 }
