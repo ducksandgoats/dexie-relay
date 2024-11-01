@@ -185,14 +185,14 @@ export default class Base extends EventEmitter {
                         while(stamps.length){
                             datas.session = 'response'
                             datas.edits = null
-                            datas.stamps = stamps.splice(stamps.length - 50, 50)
+                            datas.stamps = stamps.splice(stamps.length - 25, 25)
                             this.client.onSend(JSON.stringify(datas), nick)
                         }
                         const edits = await dataTab.where('edit').notEqual(0).toArray()
                         while(edits.length){
                             datas.session = 'response'
                             datas.stamps = null
-                            datas.edits = edits.splice(edits.length - 50, 50)
+                            datas.edits = edits.splice(edits.length - 25, 25)
                             this.client.onSend(JSON.stringify(datas), nick)
                         }
                     } else if(datas.session === 'response'){
@@ -261,7 +261,7 @@ export default class Base extends EventEmitter {
                         }
                         while(stamps.length){
                             datas.session = 'stamps'
-                            datas.stamps = stamps.splice(stamps.length - 50, 50)
+                            datas.stamps = stamps.splice(stamps.length - 25, 25)
                             datas.edits = null
                             this.client.onSend(JSON.stringify(datas), nick)
                         }
@@ -304,7 +304,7 @@ export default class Base extends EventEmitter {
                         while(edits.length){
                             datas.session = 'edits'
                             datas.stamps = null
-                            datas.edits = edits.splice(edits.length - 50, 50)
+                            datas.edits = edits.splice(edits.length - 25, 25)
                             this.client.onSend(JSON.stringify(datas), nick)
                         }
                     } else if(datas.session === 'edits'){
