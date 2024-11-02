@@ -397,7 +397,7 @@ export default class Base extends EventEmitter {
         const dataTab = this.db.table(name)
         data.name = dataTab.name
         data.session = session
-        this.client.onSend(JSON.stringify(data), null)
+        this.client.onSend(JSON.stringify(data))
     }
 
     quit(){
