@@ -7,7 +7,11 @@ export default class Base extends EventEmitter {
         super()
         this._debug = opts.debug
 
-        this._sync = opts.sync === true || opts.sync === null || opts.sync === false ? opts.sync : null
+        this._init = typeof(opts.init) === 'object' && !Array.isArray(opts.init) ? opts.init : {from: Date.now() - 86400000}
+
+        this._span = localStorage.getItem('save') ? Number(localStorage.getItem('save')) : null
+
+        this._sync = Boolean(opts.sync)
 
         this._force = opts.force === false ? opts.force : true
     
@@ -16,6 +20,7 @@ export default class Base extends EventEmitter {
         this._timer = typeof(opts.timer) === 'object' && !Array.isArray(opts.timer) ? opts.timer : {}
         this._timer.redo = this._timer.redo || 180000
         this._timer.expire = this._timer.expire || 300000
+        this._timer.save = this._timer.save || 60000
     
         this._user = localStorage.getItem('user') || (() => {const test = crypto.randomUUID();localStorage.setItem('user', test);return test;})()
         
@@ -48,71 +53,6 @@ export default class Base extends EventEmitter {
         }
         this.db.version(opts.version).stores(opts.schema)
 
-        // const rets = async (name, prop) => {
-        //     const dataTab = this.db.table(name)
-        //     return await dataTab.get(prop)
-        // }
-
-        // const adds = async (name, data) => {
-        //     const dataTab = this.db.table(name)
-        //     data.stamp = data.stamp || Date.now()
-        //     data.user = data.user || this._user
-        //     data.iden = data.iden || crypto.randomUUID()
-        //     data.edit = 0
-        //     const test = await dataTab.add(data)
-        //     // this.emit('add', test)
-        //     this.client.onSend(JSON.stringify({name, data, user: data.user, stamp: data.stamp, iden: test, status: 'add'}))
-        //     return test
-        // }
-
-        // const edits = async (name, prop, data) => {
-        //     const dataTab = this.db.table(name)
-        //     const test = await dataTab.get(prop)
-        //     if((test && test.user === this._user) && (!data.user || data.user === this._user)){
-        //         data.edit = Date.now()
-        //         const num = await dataTab.update(prop, data)
-        //         // this.emit('edit', test.iden)
-        //         this.client.onSend(JSON.stringify({name, data, iden: test.iden, user: test.user, edit: data.edit, num, status: 'edit'}))
-        //         return test.iden
-        //     } else {
-        //         throw new Error('user does not match')
-        //     }
-        // }
-
-        // const subs = async (name, prop) => {
-        //     const dataTab = this.db.table(name)
-        //     const test = await dataTab.get(prop)
-        //     if(!test){
-        //         throw new Error('did not find data')
-        //     }
-        //     if(this._force){
-        //         await dataTab.delete(prop)
-        //         // this.emit('sub', test.iden)
-        //         if(test.user === this._user){
-        //             this.client.onSend(JSON.stringify({name, iden: test.iden, user: test.user, status: 'sub'}))
-        //         }
-        //         return test.iden
-        //     } else {
-        //         if(test.user === this._user){
-        //             await dataTab.delete(prop)
-        //             // this.emit('sub', test.iden)
-        //             this.client.onSend(JSON.stringify({name, iden: test.iden, user: test.user, status: 'sub'}))
-        //             return test.iden
-        //         } else {
-        //             throw new Error('user does not match')
-        //         }
-        //     }
-        // }
-
-        // const clears = async (name) => {
-        //     const dataTab = this.db.table(name)
-        //     await dataTab.clear()
-        // }
-
-        // const tables = (name) => {
-        //     return this.db.table(name)
-        // }
-
         this._routine = setInterval(() => {
             this._adds.clear()
             for(const [prop, update] of this._edits.entries()){
@@ -122,6 +62,10 @@ export default class Base extends EventEmitter {
             }
             this._subs.clear()
         }, this._timer.redo)
+
+        this._save = setInterval(() => {
+            localStorage.setItem('save', Date.now())
+        }, this._timer.save)
 
         this._adds = new Set()
         this._edits = new Map()
@@ -359,43 +303,21 @@ export default class Base extends EventEmitter {
         }
         this._connect = (chan) => {
             console.log('connected: ' + chan)
-    
-            this.db.tables.forEach(async (table) => {
-                let useStamp
-                let useEdit
+
+            for(const table of this.db.tables){
                 if(this._sync === true){
                     this.client.onSend(JSON.stringify({name: table.name, session: 'request'}), chan)
                 }
-                if(this._sync === null){
-                    try {
-                        useStamp = await table.where('stamp').notEqual(0).last()
-                    } catch (err) {
-                        if(this._debug){
-                            console.error(err)
-                        }
-                        useStamp = {}
-                    }
-                    if(useStamp?.stamp){
-                        this.client.onSend(JSON.stringify({name: table.name, from: useStamp.stamp, session: 'stamp'}), chan)
-                    }
-                    try {
-                        useEdit = await table.where('edit').notEqual(0).last()
-                    } catch (err) {
-                        if(this._debug){
-                            console.error(err)
-                        }
-                        useEdit = {}
-                    }
-                    if(useEdit?.edit){
-                        this.client.onSend(JSON.stringify({name: table.name, from: useEdit.edit, session: 'edit'}), chan)
-                    }
-                }
                 if(this._sync === false){
-                    if(this._debug){
-                        console.log('not syncing')
+                    if(this._span){
+                        this.client.onSend(JSON.stringify({between: {from: this._span, to: Date.now()}, name: table.name, session: 'stamp'}), chan)
+                        this.client.onSend(JSON.stringify({between: {from: this._span, to: Date.now()}, name: table.name, session: 'edit'}), chan)
+                    } else {
+                        this.client.onSend(JSON.stringify({...this._init, name: table.name, session: 'stamp'}), chan)
+                        this.client.onSend(JSON.stringify({...this._init, name: table.name, session: 'edit'}), chan)
                     }
                 }
-            })
+            }
         }
 
         this.client.on('connect', this._connect)
@@ -471,8 +393,16 @@ export default class Base extends EventEmitter {
         return this.db.table(name)
     }
 
+    load(name, session, data = {}){
+        const dataTab = this.db.table(name)
+        data.name = dataTab.name
+        data.session = session
+        this.client.onSend(JSON.stringify(data), null)
+    }
+
     quit(){
         clearInterval(this._routine)
+        clearInterval(this._save)
         this._adds.clear()
         this._edits.clear()
         this._subs.clear()
