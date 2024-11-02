@@ -28,6 +28,7 @@ export default class Base extends EventEmitter {
 
         // this.crud = {}
     
+        opts.own = typeof(opts.own) === 'object' && !Array.isArray(opts.own) ? opts.own : {}
         for(const records in opts.schema){
             const record = opts.schema[records].split(',').map((data) => {return data.replaceAll(' ', '')})
             if(!record.includes('stamp')){
@@ -51,7 +52,7 @@ export default class Base extends EventEmitter {
         if(this._debug){
             console.log('name', this.db.name)
         }
-        this.db.version(opts.version).stores(opts.schema)
+        this.db.version(opts.version).stores({...opts.own, ...opts.schema})
 
         this._routine = setInterval(() => {
             this._adds.clear()
@@ -62,7 +63,6 @@ export default class Base extends EventEmitter {
             }
             this._subs.clear()
         }, this._timer.redo)
-
         this._save = setInterval(() => {
             localStorage.setItem('save', Date.now())
         }, this._timer.save)
