@@ -44,8 +44,6 @@ export default class Base extends EventEmitter {
                 record.unshift('iden')
             }
             opts.schema[records] = record.join(',')
-
-            // this.crud[records] = {table: () => {return tables(records)}, clear: async () => {return await clears(records)}, add: async (data) => {return await adds(records, data)}, sub: async (prop) => {return await subs(records, prop)}, ret: async (prop) => {return await rets(records, prop)}, edit: async (prop, data) => {return await edits(records, prop, data)}}
         }
         
         this.db = new Dexie(opts.name, {})
