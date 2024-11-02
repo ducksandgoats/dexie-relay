@@ -7,7 +7,7 @@ export default class Base extends EventEmitter {
         super()
         this._debug = opts.debug
 
-        this._init = typeof(opts.init) === 'object' && !Array.isArray(opts.init) ? opts.init : {from: Date.now() - 86400000}
+        this._load = typeof(opts.load) === 'object' && !Array.isArray(opts.load) ? opts.load : {from: Date.now() - 86400000}
 
         this._span = localStorage.getItem('save') ? Number(localStorage.getItem('save')) : null
 
@@ -313,8 +313,8 @@ export default class Base extends EventEmitter {
                         this.client.onSend(JSON.stringify({between: {from: this._span, to: Date.now()}, name: table.name, session: 'stamp'}), chan)
                         this.client.onSend(JSON.stringify({between: {from: this._span, to: Date.now()}, name: table.name, session: 'edit'}), chan)
                     } else {
-                        this.client.onSend(JSON.stringify({...this._init, name: table.name, session: 'stamp'}), chan)
-                        this.client.onSend(JSON.stringify({...this._init, name: table.name, session: 'edit'}), chan)
+                        this.client.onSend(JSON.stringify({...this._load, name: table.name, session: 'stamp'}), chan)
+                        this.client.onSend(JSON.stringify({...this._load, name: table.name, session: 'edit'}), chan)
                     }
                 }
             }
