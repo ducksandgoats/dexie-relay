@@ -250,8 +250,11 @@ export default class Base extends EventEmitter {
                         }
                     } else if(datas.session === 'stamp'){
                         let stamps
-                        if(datas.from && datas.to){
-                            stamps = await dataTab.where('stamp').between(datas.from, datas.to, true, true).toArray()
+                        if(datas.between){
+                            if(!datas.includes){
+                                datas.includes = {from: true, to: true}
+                            }
+                            stamps = await dataTab.where('stamp').between(datas.between.from, datas.between.to, datas.includes.from, datas.includes.to).toArray()
                         } else if(datas.from){
                             stamps = await dataTab.where('stamp').above(datas.from).toArray()
                         } else if(datas.to){
