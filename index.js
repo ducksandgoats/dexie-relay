@@ -68,6 +68,7 @@ export default class Base extends EventEmitter {
         this._adds = new Set()
         this._edits = new Map()
         this._subs = new Set()
+        this._piecing = new Map()
 
         this._message = async (data, nick) => {
             try {
@@ -123,20 +124,44 @@ export default class Base extends EventEmitter {
                     }
                 } else if(datas.session){
                     if(datas.session === 'request'){
-                        const stamps = await dataTab.where('stamp').notEqual(0).toArray()
                         const count = datas.count || 25
+                        const stamps = await dataTab.where('stamp').notEqual(0).toArray()
                         while(stamps.length){
                             datas.session = 'response'
                             datas.edits = null
                             datas.stamps = stamps.splice(stamps.length - count, count)
-                            this.client.onSend(JSON.stringify(datas), nick)
+                            const test = JSON.stringify(datas)
+                            if(test.length < 16000){
+                                this.client.onSend(test, nick)
+                            } else {
+                                const useID = crypto.randomUUID()
+                                const pieces = Math.ceil(test.length / 15000)
+                                let used = 0
+                                for(let i = 1;i < (pieces + 1);i++){
+                                    const slicing = i * 15000
+                                    this.client.onSend(JSON.stringify({name: datas.name, piecing: 'response', pieces, piece: i, iden: useID, stamps: test.slice(used, slicing)}), nick)
+                                    used = slicing
+                                }
+                            }
                         }
                         const edits = await dataTab.where('edit').notEqual(0).toArray()
                         while(edits.length){
                             datas.session = 'response'
                             datas.stamps = null
                             datas.edits = edits.splice(edits.length - count, count)
-                            this.client.onSend(JSON.stringify(datas), nick)
+                            const test = JSON.stringify(datas)
+                            if(test.length < 16000){
+                                this.client.onSend(test, nick)
+                            } else {
+                                const useID = crypto.randomUUID()
+                                const pieces = Math.ceil(test.length / 15000)
+                                let used = 0
+                                for(let i = 1;i < (pieces + 1);i++){
+                                    const slicing = i * 15000
+                                    this.client.onSend(JSON.stringify({name: datas.name, piecing: 'response', pieces, piece: i, iden: useID, edits: test.slice(used, slicing)}), nick)
+                                    used = slicing
+                                }
+                            }
                         }
                     } else if(datas.session === 'response'){
                         if(datas.stamps){
@@ -210,7 +235,19 @@ export default class Base extends EventEmitter {
                             datas.session = 'stamps'
                             datas.stamps = stamps.splice(stamps.length - count, count)
                             datas.edits = null
-                            this.client.onSend(JSON.stringify(datas), nick)
+                            const test = JSON.stringify(datas)
+                            if(test.length < 16000){
+                                this.client.onSend(test, nick)
+                            } else {
+                                const useID = crypto.randomUUID()
+                                const pieces = Math.ceil(test.length / 15000)
+                                let used = 0
+                                for(let i = 1;i < (pieces + 1);i++){
+                                    const slicing = i * 15000
+                                    this.client.onSend(JSON.stringify({name: datas.name, piecing: 'stamps', pieces, piece: i, iden: useID, stamps: test.slice(used, slicing)}), nick)
+                                    used = slicing
+                                }
+                            }
                         }
                     } else if(datas.session === 'stamps'){
                         if(!datas.stamps.length){
@@ -239,12 +276,15 @@ export default class Base extends EventEmitter {
                         this.emit('bulk', arr)
                     } else if(datas.session === 'edit'){
                         let edits
-                        if(datas.from && datas.to){
-                            edits = await dataTab.where('stamp').between(datas.from, datas.to, true, true).toArray()
+                        if(datas.between){
+                            if(!datas.includes){
+                                datas.includes = {from: true, to: true}
+                            }
+                            edits = await dataTab.where('edit').between(datas.between.from, datas.between.to, datas.includes.from, datas.includes.to).toArray()
                         } else if(datas.from){
-                            edits = await dataTab.where('stamp').above(datas.from).toArray()
+                            edits = await dataTab.where('edit').above(datas.from).toArray()
                         } else if(datas.to){
-                            edits = await dataTab.where('stamp').below(datas.to).toArray()
+                            edits = await dataTab.where('edit').below(datas.to).toArray()
                         } else {
                             return
                         }
@@ -253,7 +293,19 @@ export default class Base extends EventEmitter {
                             datas.session = 'edits'
                             datas.stamps = null
                             datas.edits = edits.splice(edits.length - count, count)
-                            this.client.onSend(JSON.stringify(datas), nick)
+                            const test = JSON.stringify(datas)
+                            if(test.length < 16000){
+                                this.client.onSend(test, nick)
+                            } else {
+                                const useID = crypto.randomUUID()
+                                const pieces = Math.ceil(test.length / 15000)
+                                let used = 0
+                                for(let i = 1;i < (pieces + 1);i++){
+                                    const slicing = i * 15000
+                                    this.client.onSend(JSON.stringify({name: datas.name, piecing: 'edits', pieces, piece: i, iden: useID, edits: test.slice(used, slicing)}), nick)
+                                    used = slicing
+                                }
+                            }
                         }
                     } else if(datas.session === 'edits'){
                         if(!datas.edits.length){
@@ -280,6 +332,258 @@ export default class Base extends EventEmitter {
                             }
                         }
                         this.emit('bulk', arr)
+                    } else {
+                        return
+                    }
+                } else if(datas.piecing){
+                    if(datas.piecing === 'add'){
+                        if(datas.user === this._user){
+                            return
+                        }
+                        if(this._adds.has(datas.iden)){
+                            return
+                        }
+                        if(this._piecing.has(datas.iden)){
+                            const obj = this._piecing.get(datas.iden)
+                            if(!obj.arr[datas.piece - 1]){
+                                obj.arr[datas.piece - 1] = datas.data
+                                obj.stamp = Date.now()
+                                this.client.onMesh(data, nick)
+                                if(obj.arr.every(Boolean)){
+                                    const useData = JSON.parse(obj.arr.join(''))
+                                    await dataTab.add(useData.data)
+                                    this.emit('add', datas.iden)
+                                    this._adds.add(datas.iden)
+                                    this._piecing.delete(datas.iden)
+                                }
+                            }
+                        } else {
+                            const obj = {stamp: Date.now(), arr: new Array(datas.pieces).fill(null)}
+                            this._piecing.set(datas.iden, obj)
+                            if(!obj.arr[datas.piece - 1]){
+                                obj.arr[datas.piece - 1] = datas.data
+                                obj.stamp = Date.now()
+                                this.client.onMesh(data, nick)
+                            }
+                        }
+                    } else if(datas.piecing === 'edit'){
+                        if(datas.user === this._user){
+                            return
+                        }
+                        if(this._edits.has(datas.iden)){
+                            const test = this._edits.get(datas.iden)
+                            if(datas.edit > test){
+                                if(this._piecing.has(datas.iden)){
+                                    const obj = this._piecing.get(datas.iden)
+                                    if(!obj.arr[datas.piece - 1]){
+                                        obj.arr[datas.piece - 1] = datas.data
+                                        obj.stamp = Date.now()
+                                        this.client.onMesh(data, nick)
+                                        if(obj.arr.every(Boolean)){
+                                            const useData = JSON.parse(obj.arr.join(''))
+                                            if(await dataTab.update(datas.iden, useData.data)){
+                                                this.emit('edit', datas.iden)
+                                            }
+                                            this._edits.set(datas.iden, datas.edit)
+                                            this._piecing.delete(datas.iden)
+                                        }
+                                    }
+                                } else {
+                                    const obj = {stamp: Date.now(), arr: new Array(datas.pieces).fill(null)}
+                                    this._piecing.set(datas.iden, obj)
+                                    if(!obj.arr[datas.piece - 1]){
+                                        obj.arr[datas.piece - 1] = datas.data
+                                        obj.stamp = Date.now()
+                                        this.client.onMesh(data, nick)
+                                    }
+                                }
+                            }
+                            // else {
+                            //     return
+                            // }
+                        } else {
+                            if(this._piecing.has(datas.iden)){
+                                const obj = this._piecing.get(datas.iden)
+                                if(!obj.arr[datas.piece - 1]){
+                                    obj.arr[datas.piece - 1] = datas.data
+                                    obj.stamp = Date.now()
+                                    this.client.onMesh(data, nick)
+                                    if(obj.arr.every(Boolean)){
+                                        const useData = JSON.parse(obj.arr.join(''))
+                                        if(await dataTab.update(datas.iden, useData.data)){
+                                            this.emit('edit', datas.iden)
+                                        }
+                                        this._edits.set(datas.iden, datas.edit)
+                                        this._piecing.delete(datas.iden)
+                                    }
+                                }
+                            } else {
+                                const obj = {stamp: Date.now(), arr: new Array(datas.pieces).fill(null)}
+                                this._piecing.set(datas.iden, obj)
+                                if(!obj.arr[datas.piece - 1]){
+                                    obj.arr[datas.piece - 1] = datas.data
+                                    obj.stamp = Date.now()
+                                    this.client.onMesh(data, nick)
+                                }
+                            }
+                        }
+                    } else if(datas.piecing === 'response'){
+                        if(this._piecing.has(datas.iden)){
+                            const obj = this._piecing.get(datas.iden)
+                            if(!obj.arr[datas.piece - 1]){
+                                obj.arr[datas.piece - 1] = datas.data
+                                obj.stamp = Date.now()
+                                if(obj.arr.every(Boolean)){
+                                    const useData = JSON.parse(obj.arr.join(''))
+                                    if(useData.stamps){
+                                        if(!useData.stamps.length){
+                                            return
+                                        }
+                                        const arr = []
+                                        for(const data of useData.stamps){
+                                            try {
+                                                const got = await dataTab.get(data.iden)
+                                                if(got){
+                                                    if(got.edit < data.edit){
+                                                        await dataTab.put(data)
+                                                        arr.push(data.iden)
+                                                    }
+                                                } else {
+                                                    await dataTab.add(data)
+                                                    arr.push(data.iden)
+                                                }
+                                            } catch (err) {
+                                                if(this._debug){
+                                                    console.error(err)
+                                                }
+                                                continue
+                                            }
+                                        }
+                                        this.emit('bulk', arr)
+                                    }
+                                    if(useData.edits){
+                                        if(!useData.edits.length){
+                                            return
+                                        }
+                                        const arr = []
+                                        for(const data of useData.edits){
+                                            try {
+                                                const got = await dataTab.get(data.iden)
+                                                if(got){
+                                                    if(got.edit < data.edit){
+                                                        await dataTab.put(data)
+                                                        arr.push(data.iden)
+                                                    }
+                                                } else {
+                                                    await dataTab.add(data)
+                                                    arr.push(data.iden)
+                                                }
+                                            } catch (err) {
+                                                if(this._debug){
+                                                    console.error(err)
+                                                }
+                                                continue
+                                            }
+                                        }
+                                        this.emit('bulk', arr)
+                                    }
+                                    this._piecing.delete(datas.iden)
+                                }
+                            }
+                        } else {
+                            const obj = {stamp: Date.now(), arr: new Array(datas.pieces).fill(null)}
+                            this._piecing.set(datas.iden, obj)
+                            if(!obj.arr[datas.piece - 1]){
+                                obj.arr[datas.piece - 1] = datas.data
+                                obj.stamp = Date.now()
+                            }
+                        }
+                    } else if(datas.piecing === 'stamps'){
+                        if(this._piecing.has(datas.iden)){
+                            const obj = this._piecing.get(datas.iden)
+                            if(!obj.arr[datas.piece - 1]){
+                                obj.arr[datas.piece - 1] = datas.data
+                                obj.stamp = Date.now()
+                                if(obj.arr.every(Boolean)){
+                                    const useData = JSON.parse(obj.arr.join(''))
+                                    if(!useData.stamps.length){
+                                        return
+                                    }
+                                    const arr = []
+                                    for(const data of useData.stamps){
+                                        try {
+                                            const got = await dataTab.get(data.iden)
+                                            if(got){
+                                                if(got.edit < data.edit){
+                                                    await dataTab.put(data)
+                                                    arr.push(data.iden)
+                                                }
+                                            } else {
+                                                await dataTab.add(data)
+                                                arr.push(data.iden)
+                                            }
+                                        } catch (err) {
+                                            if(this._debug){
+                                                console.error(err)
+                                            }
+                                            continue
+                                        }
+                                    }
+                                    this.emit('bulk', arr)
+                                    this._piecing.delete(datas.iden)
+                                }
+                            }
+                        } else {
+                            const obj = {stamp: Date.now(), arr: new Array(datas.pieces).fill(null)}
+                            this._piecing.set(datas.iden, obj)
+                            if(!obj.arr[datas.piece - 1]){
+                                obj.arr[datas.piece - 1] = datas.data
+                                obj.stamp = Date.now()
+                            }
+                        }
+                    } else if(datas.piecing === 'edits'){
+                        if(this._piecing.has(datas.iden)){
+                            const obj = this._piecing.get(datas.iden)
+                            if(!obj.arr[datas.piece - 1]){
+                                obj.arr[datas.piece - 1] = datas.data
+                                obj.stamp = Date.now()
+                                if(obj.arr.every(Boolean)){
+                                    const useData = JSON.parse(obj.arr.join(''))
+                                    if(!useData.edits.length){
+                                        return
+                                    }
+                                    const arr = []
+                                    for(const data of useData.edits){
+                                        try {
+                                            const got = await dataTab.get(data.iden)
+                                            if(got){
+                                                if(got.edit < data.edit){
+                                                    await dataTab.put(data)
+                                                    arr.push(data.iden)
+                                                }
+                                            } else {
+                                                await dataTab.add(data)
+                                                arr.push(data.iden)
+                                            }
+                                        } catch (err) {
+                                            if(this._debug){
+                                                console.error(err)
+                                            }
+                                            continue
+                                        }
+                                    }
+                                    this.emit('bulk', arr)
+                                    this._piecing.delete(datas.iden)
+                                }
+                            }
+                        } else {
+                            const obj = {stamp: Date.now(), arr: new Array(datas.pieces).fill(null)}
+                            this._piecing.set(datas.iden, obj)
+                            if(!obj.arr[datas.piece - 1]){
+                                obj.arr[datas.piece - 1] = datas.data
+                                obj.stamp = Date.now()
+                            }
+                        }
                     } else {
                         return
                     }
@@ -339,7 +643,18 @@ export default class Base extends EventEmitter {
         data.edit = 0
         const test = await dataTab.add(data)
         // this.emit('add', test)
-        this.client.onSend(JSON.stringify({name, data, user: data.user, stamp: data.stamp, iden: test, status: 'add'}))
+        const useData = JSON.stringify({name, data, user: data.user, stamp: data.stamp, iden: test, status: 'add'})
+        if(useData.length < 16000){
+            this.client.onSend(useData)
+        } else {
+            const pieces = Math.ceil(useData.length / 15000)
+            let used = 0
+            for(let i = 1;i < (pieces + 1);i++){
+                const slicing = i * 15000
+                this.client.onSend(JSON.stringify({name, data: useData.slice(used, slicing), user: data.user, stamp: data.stamp, iden: test, piecing: 'add', pieces, pice: i}), nick)
+                used = slicing
+            }
+        }
         return test
     }
 
@@ -350,7 +665,18 @@ export default class Base extends EventEmitter {
             data.edit = Date.now()
             const num = await dataTab.update(prop, data)
             // this.emit('edit', test.iden)
-            this.client.onSend(JSON.stringify({name, data, iden: test.iden, user: test.user, edit: data.edit, num, status: 'edit'}))
+            const useData = JSON.stringify({name, data, iden: test.iden, user: test.user, edit: data.edit, num, status: 'edit'})
+            if(useData.length < 16000){
+                this.client.onSend(useData)
+            } else {
+                const pieces = Math.ceil(useData.length / 15000)
+                let used = 0
+                for(let i = 1;i < (pieces + 1);i++){
+                    const slicing = i * 15000
+                    this.client.onSend(JSON.stringify({name, data: useData.slice(used, slicing), iden: test.iden, user: test.user, edit: data.edit, num, piecing: 'edit', pieces, piece: i}), nick)
+                    used = slicing
+                }
+            }
             return test.iden
         } else {
             throw new Error('user does not match')
