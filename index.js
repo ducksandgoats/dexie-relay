@@ -25,8 +25,6 @@ export default class Base extends EventEmitter {
         this._user = localStorage.getItem('user') || (() => {const test = crypto.randomUUID();localStorage.setItem('user', test);return test;})()
         
         this.client = new Client(opts.url, opts.hash, opts.rtor)
-
-        // this.crud = {}
     
         opts.own = typeof(opts.own) === 'object' && !Array.isArray(opts.own) ? opts.own : {}
         for(const records in opts.schema){
