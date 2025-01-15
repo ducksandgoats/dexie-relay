@@ -21,7 +21,6 @@ export default class Client extends Events {
         this.hash = hash
         this.url = url
         this.channels = new Map()
-        this.tracks = new Set()
         this.socket = null
         this.temps = new Map()
         this.routine = null
@@ -807,5 +806,9 @@ export default class Client extends Events {
         } catch {
             return null
         }
+    }
+
+    tracks(){
+        return {total: this.channels.size + this.temps.size, temp: this.temps.size, conn: this.channels.size}
     }
 }
