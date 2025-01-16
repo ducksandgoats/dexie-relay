@@ -88,7 +88,7 @@ export default class Base extends EventEmitter {
                             return
                         }
                         await dataTab.add(datas.data)
-                        this.emit('add', datas.iden)
+                        this.emit('add', {name: dataTab.name, iden: datas.iden})
                         this._adds.add(datas.iden)
                         this.client.onMesh(data, nick)
                     } else if(datas.status === 'edit'){
@@ -96,7 +96,7 @@ export default class Base extends EventEmitter {
                             const test = this._edits.get(datas.iden)
                             if(datas.edit > test){
                                 await dataTab.update(datas.iden, datas.data)
-                                this.emit('edit', datas.iden)
+                                this.emit('edit', {name: dataTab.name, iden: datas.iden})
                                 this._edits.set(datas.iden, datas.edit)
                                 this.client.onMesh(data, nick)
                             } else {
@@ -104,7 +104,7 @@ export default class Base extends EventEmitter {
                             }
                         } else {
                             await dataTab.update(datas.iden, datas.data)
-                            this.emit('edit', datas.iden)
+                            this.emit('edit', {name: dataTab.name, iden: datas.iden})
                             this._edits.set(datas.iden, datas.edit)
                             this.client.onMesh(data, nick)
                         }
@@ -114,7 +114,7 @@ export default class Base extends EventEmitter {
                         }
                         if(!this._keep){
                             await dataTab.delete(datas.iden)
-                            this.emit('sub', datas.iden)
+                            this.emit('sub', {name: dataTab.name, iden: datas.iden})
                         }
                         this._subs.add(datas.iden)
                         this.client.onMesh(data, nick)
@@ -179,7 +179,7 @@ export default class Base extends EventEmitter {
                                 continue
                             }
                         }
-                        this.emit('bulk', arr)
+                        this.emit('bulk', {name: dataTab.name, idens: arr})
                     } else if(datas.session === 'edit'){
                         let edits
                         if(datas.between){
@@ -237,7 +237,7 @@ export default class Base extends EventEmitter {
                                 continue
                             }
                         }
-                        this.emit('bulk', arr)
+                        this.emit('bulk', {name: dataTab.name, idens: arr})
                     } else {
                         return
                     }
@@ -258,7 +258,7 @@ export default class Base extends EventEmitter {
                                 if(obj.arr.every(Boolean)){
                                     const useData = JSON.parse(obj.arr.join(''))
                                     await dataTab.add(useData.data)
-                                    this.emit('add', datas.iden)
+                                    this.emit('add', {name: dataTab.name, iden: datas.iden})
                                     this._adds.add(datas.iden)
                                     this._piecing.delete(datas.iden)
                                 }
@@ -288,7 +288,7 @@ export default class Base extends EventEmitter {
                                         if(obj.arr.every(Boolean)){
                                             const useData = JSON.parse(obj.arr.join(''))
                                             if(await dataTab.update(datas.iden, useData.data)){
-                                                this.emit('edit', datas.iden)
+                                                this.emit('edit', {name: dataTab.name, iden: datas.iden})
                                             }
                                             this._edits.set(datas.iden, datas.edit)
                                             this._piecing.delete(datas.iden)
@@ -317,7 +317,7 @@ export default class Base extends EventEmitter {
                                     if(obj.arr.every(Boolean)){
                                         const useData = JSON.parse(obj.arr.join(''))
                                         if(await dataTab.update(datas.iden, useData.data)){
-                                            this.emit('edit', datas.iden)
+                                            this.emit('edit', {name: dataTab.name, iden: datas.iden})
                                         }
                                         this._edits.set(datas.iden, datas.edit)
                                         this._piecing.delete(datas.iden)
@@ -364,7 +364,7 @@ export default class Base extends EventEmitter {
                                             continue
                                         }
                                     }
-                                    this.emit('bulk', arr)
+                                    this.emit('bulk', {name: dataTab.name, idens: arr})
                                     this._piecing.delete(datas.iden)
                                 }
                             }
@@ -407,7 +407,7 @@ export default class Base extends EventEmitter {
                                             continue
                                         }
                                     }
-                                    this.emit('bulk', arr)
+                                    this.emit('bulk', {name: dataTab.name, idens: arr})
                                     this._piecing.delete(datas.iden)
                                 }
                             }
