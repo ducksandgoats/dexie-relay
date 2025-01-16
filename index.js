@@ -1,6 +1,7 @@
 import {Client} from 'relay-to-relay'
 import {Dexie} from 'dexie'
 import {EventEmitter} from 'events'
+import "dexie-export-import"
 
 export default class Base extends EventEmitter {
     constructor(opts){
@@ -121,100 +122,7 @@ export default class Base extends EventEmitter {
                         return
                     }
                 } else if(datas.session){
-                    if(datas.session === 'request'){
-                        const count = datas.count || 25
-                        const stamps = await dataTab.where('stamp').notEqual(0).toArray()
-                        while(stamps.length){
-                            datas.session = 'response'
-                            datas.edits = null
-                            datas.stamps = stamps.splice(stamps.length - count, count)
-                            const test = JSON.stringify(datas)
-                            if(test.length < 16000){
-                                this.client.onSend(test, nick)
-                            } else {
-                                const useID = crypto.randomUUID()
-                                const pieces = Math.ceil(test.length / 15000)
-                                let used = 0
-                                for(let i = 1;i < (pieces + 1);i++){
-                                    const slicing = i * 15000
-                                    this.client.onSend(JSON.stringify({name: datas.name, piecing: 'response', pieces, piece: i, iden: useID, stamps: test.slice(used, slicing)}), nick)
-                                    used = slicing
-                                }
-                            }
-                        }
-                        const edits = await dataTab.where('edit').notEqual(0).toArray()
-                        while(edits.length){
-                            datas.session = 'response'
-                            datas.stamps = null
-                            datas.edits = edits.splice(edits.length - count, count)
-                            const test = JSON.stringify(datas)
-                            if(test.length < 16000){
-                                this.client.onSend(test, nick)
-                            } else {
-                                const useID = crypto.randomUUID()
-                                const pieces = Math.ceil(test.length / 15000)
-                                let used = 0
-                                for(let i = 1;i < (pieces + 1);i++){
-                                    const slicing = i * 15000
-                                    this.client.onSend(JSON.stringify({name: datas.name, piecing: 'response', pieces, piece: i, iden: useID, edits: test.slice(used, slicing)}), nick)
-                                    used = slicing
-                                }
-                            }
-                        }
-                    } else if(datas.session === 'response'){
-                        if(datas.stamps){
-                            if(!datas.stamps.length){
-                                return
-                            }
-                            const arr = []
-                            for(const data of datas.stamps){
-                                try {
-                                    const got = await dataTab.get(data.iden)
-                                    if(got){
-                                        if(got.edit < data.edit){
-                                            await dataTab.put(data)
-                                            arr.push(data.iden)
-                                        }
-                                    } else {
-                                        await dataTab.add(data)
-                                        arr.push(data.iden)
-                                    }
-                                } catch (err) {
-                                    if(this._debug){
-                                        console.error(err)
-                                    }
-                                    continue
-                                }
-                            }
-                            this.emit('bulk', arr)
-                        }
-                        if(datas.edits){
-                            if(!datas.edits.length){
-                                return
-                            }
-                            const arr = []
-                            for(const data of datas.edits){
-                                try {
-                                    const got = await dataTab.get(data.iden)
-                                    if(got){
-                                        if(got.edit < data.edit){
-                                            await dataTab.put(data)
-                                            arr.push(data.iden)
-                                        }
-                                    } else {
-                                        await dataTab.add(data)
-                                        arr.push(data.iden)
-                                    }
-                                } catch (err) {
-                                    if(this._debug){
-                                        console.error(err)
-                                    }
-                                    continue
-                                }
-                            }
-                            this.emit('bulk', arr)
-                        }
-                    } else if(datas.session === 'stamp'){
+                    if(datas.session === 'stamp'){
                         let stamps
                         if(datas.between){
                             if(!datas.includes){
@@ -226,7 +134,7 @@ export default class Base extends EventEmitter {
                         } else if(datas.to){
                             stamps = await dataTab.where('stamp').below(datas.to).toArray()
                         } else {
-                            return
+                            stamps = await dataTab.where('stamp').notEqual(0).toArray()
                         }
                         const count = datas.count || 25
                         while(stamps.length){
@@ -284,7 +192,7 @@ export default class Base extends EventEmitter {
                         } else if(datas.to){
                             edits = await dataTab.where('edit').below(datas.to).toArray()
                         } else {
-                            return
+                            edits = await dataTab.where('edit').notEqual(0).toArray()
                         }
                         const count = datas.count || 25
                         while(edits.length){
@@ -425,77 +333,6 @@ export default class Base extends EventEmitter {
                                 }
                             }
                         }
-                    } else if(datas.piecing === 'response'){
-                        if(this._piecing.has(datas.iden)){
-                            const obj = this._piecing.get(datas.iden)
-                            if(!obj.arr[datas.piece - 1]){
-                                obj.arr[datas.piece - 1] = datas.data
-                                obj.stamp = Date.now()
-                                if(obj.arr.every(Boolean)){
-                                    const useData = JSON.parse(obj.arr.join(''))
-                                    if(useData.stamps){
-                                        if(!useData.stamps.length){
-                                            return
-                                        }
-                                        const arr = []
-                                        for(const data of useData.stamps){
-                                            try {
-                                                const got = await dataTab.get(data.iden)
-                                                if(got){
-                                                    if(got.edit < data.edit){
-                                                        await dataTab.put(data)
-                                                        arr.push(data.iden)
-                                                    }
-                                                } else {
-                                                    await dataTab.add(data)
-                                                    arr.push(data.iden)
-                                                }
-                                            } catch (err) {
-                                                if(this._debug){
-                                                    console.error(err)
-                                                }
-                                                continue
-                                            }
-                                        }
-                                        this.emit('bulk', arr)
-                                    }
-                                    if(useData.edits){
-                                        if(!useData.edits.length){
-                                            return
-                                        }
-                                        const arr = []
-                                        for(const data of useData.edits){
-                                            try {
-                                                const got = await dataTab.get(data.iden)
-                                                if(got){
-                                                    if(got.edit < data.edit){
-                                                        await dataTab.put(data)
-                                                        arr.push(data.iden)
-                                                    }
-                                                } else {
-                                                    await dataTab.add(data)
-                                                    arr.push(data.iden)
-                                                }
-                                            } catch (err) {
-                                                if(this._debug){
-                                                    console.error(err)
-                                                }
-                                                continue
-                                            }
-                                        }
-                                        this.emit('bulk', arr)
-                                    }
-                                    this._piecing.delete(datas.iden)
-                                }
-                            }
-                        } else {
-                            const obj = {stamp: Date.now(), arr: new Array(datas.pieces).fill(null)}
-                            this._piecing.set(datas.iden, obj)
-                            if(!obj.arr[datas.piece - 1]){
-                                obj.arr[datas.piece - 1] = datas.data
-                                obj.stamp = Date.now()
-                            }
-                        }
                     } else if(datas.piecing === 'stamps'){
                         if(this._piecing.has(datas.iden)){
                             const obj = this._piecing.get(datas.iden)
@@ -601,14 +438,14 @@ export default class Base extends EventEmitter {
         this._err = (e, chan) => {
             console.error(e, chan)
         }
-        this._connect = (chan) => {
+        this._connect = async (chan) => {
             console.log('connected: ' + chan)
 
             for(const table of this.db.tables){
                 if(this._sync === true){
-                    this.client.onSend(JSON.stringify({name: table.name, session: 'request'}), chan)
-                }
-                if(this._sync === false){
+                    this.client.onSend(JSON.stringify({name: table.name, session: 'stamp'}), chan)
+                    this.client.onSend(JSON.stringify({name: table.name, session: 'edit'}), chan)
+                } else if(this._sync === null){
                     if(this._span){
                         this.client.onSend(JSON.stringify({between: {from: this._span, to: Date.now()}, name: table.name, session: 'stamp'}), chan)
                         this.client.onSend(JSON.stringify({between: {from: this._span, to: Date.now()}, name: table.name, session: 'edit'}), chan)
@@ -616,6 +453,17 @@ export default class Base extends EventEmitter {
                         this.client.onSend(JSON.stringify({...this._load, name: table.name, session: 'stamp'}), chan)
                         this.client.onSend(JSON.stringify({...this._load, name: table.name, session: 'edit'}), chan)
                     }
+                } else if(this._sync === false){
+                    const s = await table.where('stamp').notEqual(0).last()
+                    const e = await table.where('edit').notEqual(0).last()
+                    if(s){
+                        this.client.onSend(JSON.stringify({from: s.stamp - 43200000, name: table.name, session: 'stamp'}), chan)
+                    }
+                    if(e){
+                        this.client.onSend(JSON.stringify({from: e.edit - 43200000, name: table.name, session: 'edit'}), chan)
+                    }
+                } else {
+                    continue
                 }
             }
         }
@@ -720,6 +568,14 @@ export default class Base extends EventEmitter {
         data.name = dataTab.name
         data.session = session
         this.client.onSend(JSON.stringify(data))
+    }
+
+    async getDB(blob, opts){
+        return await this.db.import(blob, opts)
+    }
+
+    async postDB(opts){
+        return await this.db.export(opts)
     }
 
     quit(){
