@@ -2,8 +2,8 @@
 
 import minimist from 'minimist'
 import {Server} from '../index.js'
-import path from 'path'
-import fs from 'fs'
+// import path from 'path'
+// import fs from 'fs'
 
 const argv = minimist(process.argv.slice(2), {
   alias: {

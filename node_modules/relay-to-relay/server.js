@@ -40,11 +40,10 @@ export default class Server extends Events {
         this.limit = typeof(opts.limit) === 'object' && !Array.isArray(opts.limit) ? opts.limit : {}
         this.limit.serverConnections = this.limit.serverConnections || 0
         this.limit.clientConnections = this.limit.clientConnections || 0
+        this.limit.signalConnections = this.limit.signalConnections || 0
         this.timer = typeof(opts.timer) === 'object' && !Array.isArray(opts.timer) ? opts.timer : {}
-        this.timer.webOne = this.timer.webOne || 45000
-        this.timer.webTwo = this.timer.webTwo || 30000
-        this.timer.webThree = this.timer.webThree || 45000
-        this.timer.check = this.timer.check || 60000
+        this.timer.checkServer = this.timer.checkServer || 60000
+        this.timer.checkClient = this.timer.checkClient || 60000
         this.timer.talking = this.timer.talking || 1800000
         this.timer.redo = this.timer.redo || 300000
         this.http = null
@@ -148,12 +147,9 @@ export default class Server extends Events {
               } else {
                 socket.hash = hash
                 socket.id = id
-                socket.wait = 1
-                socket.stamp = Date.now()
                 socket.active = true
                 socket.ids = new Set()
                 socket.web = new Set()
-                socket.offers = new Set()
                 this.clients.set(socket.id, socket)
                 this.onClientConnection(socket)
               }
@@ -333,45 +329,44 @@ export default class Server extends Events {
           //   socket.active = true
           // }
           if(data.action === 'session'){
-            socket.wait = 2
-            socket.stamp = null
             this.matchOffers(socket)
           } else if(data.action === 'proc'){
-            socket.wait = 3
-            socket.stamp = Date.now()
             if(this.clients.has(data.res)){
               const test = this.clients.get(data.res)
-              if(test.ids.has(data.req) && !test.web.has(data.req)){
-                test.web.add(data.req)
+              test.send(JSON.stringify({action: 'shake'}))
+              if(test.ids.has(data.req)){
                 test.ids.delete(data.req)
               }
+              if(!test.web.has(data.req)){
+                test.web.add(data.req)
+              }
+              if(this.limit.signalConnections && test.web.size >= this.limit.signalConnections){
+                test.close()
+              }
             }
-            if(socket.ids.has(data.res) && !socket.web.has(data.res)){
-              socket.web.add(data.res)
+            if(socket.ids.has(data.res)){
               socket.ids.delete(data.res)
+            }
+            if(!socket.web.has(data.res)){
+              socket.web.add(data.res)
+            }
+            if(this.limit.signalConnections && socket.web.size >= this.limit.signalConnections){
+              socket.close()
             }
           }
           if(data.action === 'request'){
-            socket.wait = 2
-            socket.stamp = null
             if(socket.ids.has(data.res) && this.clients.has(data.res)){
               const test = this.clients.get(data.res)
               test.send(JSON.stringify(data))
-              test.wait = 2
-              test.stamp = Date.now()
             } else {
               socket.send(JSON.stringify({action: 'interrupt', id: data.res}))
               this.matchOffers(socket)
             }
           }
           if(data.action === 'response'){
-            socket.wait = 3
-            socket.stamp = Date.now()
             if(socket.ids.has(data.req) && this.clients.has(data.req)){
               const test = this.clients.get(data.req)
               test.send(JSON.stringify(data))
-              test.wait = 2
-              test.stamp = Date.now()
             } else {
               socket.send(JSON.stringify({action: 'interrupt', id: data.req}))
               this.matchOffers(socket)
@@ -391,13 +386,10 @@ export default class Server extends Events {
         socket.onHandle()
         if(this.offers.has(socket.hash)){
           const offer = this.offers.get(socket.hash)
-          socket.offers.forEach((e) => {
-            if(offer.has(e)){
-              offer.delete(e)
-            }
-          })
+          if(offer.has(socket.id)){
+            offer.delete(socket.id)
+          }
         }
-        socket.offers.clear()
         socket.ids.forEach((id) => {
           if(this.clients.has(id)){
             const matched = this.clients.get(id)
@@ -592,30 +584,30 @@ export default class Server extends Events {
     matchOffers(socket){
       const testing = this.offers.has(socket.hash) ? this.offers.get(socket.hash) : null
       if(testing){
+        if(testing.has(socket.id)){
+          return
+        }
         for(const test of testing.values()){
-          if(socket.id === test.user || socket.web.has(test.user) || socket.ids.has(test.user)){
+          if(socket.web.has(test) || socket.ids.has(test)){
             continue
           } else {
-            testing.delete(test)
-            if(this.clients.has(test.user)){
-              const chan = this.clients.get(test.user)
-              chan.offers.delete(test)
+            if(this.clients.has(test)){
+              const chan = this.clients.get(test)
               chan.ids.add(socket.id)
               socket.ids.add(chan.id)
-              socket.send(JSON.stringify({req: socket.id, res: chan.id, action: 'init'}))
-              socket.wait = 2
-              socket.stamp = Date.now()
+              // socket.send(JSON.stringify({req: socket.id, res: chan.id, action: 'init'}))
+              chan.send(JSON.stringify({req: chan.id, res: socket.id, action: 'init'}))
+              testing.delete(test)
               return
             } else {
+              testing.delete(test)
               continue
             }
           }
         }
       }
       if(testing){
-        const waiting = {user: socket.id}
-        testing.add(waiting)
-        socket.offers.add(waiting)
+        testing.add(socket.id)
       }
     }
     start(){
@@ -638,8 +630,8 @@ export default class Server extends Events {
       if(!this.http.listening){
         this.http.listen(this.port, this.server)
       }
-      if(!this.check){
-        this.check = setInterval(() => {
+      if(!this.checkServer){
+        this.checkServer = setInterval(() => {
           for(const test in this.servers.values()){
             if(!test.active){
               test.terminate()
@@ -649,37 +641,20 @@ export default class Server extends Events {
               test.send(JSON.stringify({action: 'ping'}))
             }
           }
+        }, this.timer.checkServer)
+      }
+      if(!this.checkClient){
+        this.checkClient = setInterval(() => {
           for(const test in this.clients.values()){
-            // if(!test.active){
-            //   test.terminate()
-            //   continue
-            // } else {
-            //   test.active = false
-            //   test.send(JSON.stringify({action: 'ping'}))
-            // }
-            if(test.wait === 1){
-              if(test.stamp){
-                if((Date.now() - test.stamp) > this.timer.webOne){
-                  test.close()
-                }
-              }
-            } else if(test.wait === 2){
-              if(test.stamp){
-                if((Date.now() - test.stamp) > this.timer.webTwo){
-                  test.close()
-                }
-              }
-            } else if(test.wait === 3){
-              if(test.stamp){
-                if((Date.now() - test.stamp) > this.timer.webThree){
-                  test.close()
-                }
-              }
-            } else {
+            if(!test.active){
+              test.terminate()
               continue
+            } else {
+              test.active = false
+              test.send(JSON.stringify({action: 'ping'}))
             }
           }
-        }, this.timer.check)
+        }, this.timer.checkClient)
       }
 
       this.talk()
@@ -708,9 +683,13 @@ export default class Server extends Events {
       if(this.relay.listening){
         this.relay.destroy()
       }
-      if(this.check){
-        clearInterval(this.check)
-        this.check = null
+      if(this.checkServer){
+        clearInterval(this.checkServer)
+        this.checkServer = null
+      }
+      if(this.checkClient){
+        clearInterval(this.checkClient)
+        this.checkClient = null
       }
       if(this.talking){
         clearInterval(this.talking)
