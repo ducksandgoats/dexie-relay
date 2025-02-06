@@ -16,7 +16,7 @@ import crypto from 'crypto'
  * @param {String}  opts.host     host used for server
  * @param {Number}  opts.port     port used for server
  * @param {String}  opts.domain     domain name that will be used
- * @param {Array|String}  opts.hashes     join the relays for these hashes, array of hashes or comma separated string of hashes
+ * @param {String}  opts.hashes     join the relays for these hashes, array of hashes or comma separated string of hashes
  * @param {Object} opts.limit       limit the connections of the relay and the hashes
  * @param {Boolean}  opts.init    automatically start once instantiated
  * @param {String}  opts.server    ip of the server
@@ -61,10 +61,7 @@ export default class Server extends Events {
         this.servers = new Map()
         this.clients = new Map()
         this.triedAlready = new Map()
-        if(!opts.hashes || !Array.isArray(opts.hashes) || !opts.hashes.length || !opts.hashes.every((data) => {return typeof(data) === 'string'})){
-          throw new Error('hashes must be an array and must not be an empty array')
-        }
-        this.hashes = new Set(opts.hashes)
+        this.hashes = new Set(opts.hashes.split(',').filter(Boolean))
         this.relays = new Map((() => {const test = [];this.hashes.forEach((data) => {test.push([crypto.createHash('sha1').update(data).digest('hex'), []])});return test;})())
         this.offers = new Map((() => {const test = [];this.hashes.forEach((data) => {test.push([data, new Set()])});return test;})())
         // this.offers = (() => {const test = {};this.hashes.forEach((data) => {test[data] = new Map()});return test;})()

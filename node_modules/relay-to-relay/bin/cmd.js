@@ -80,7 +80,7 @@ const server = new Server({
   domain: argv['domain'],
   host: argv['host'],
   port: argv['port'],
-  hashes: argv['hashes'].split(',').filter(Boolean),
+  hashes: argv['hashes'],
   init: argv['init'],
   domain: argv['domain']
 })

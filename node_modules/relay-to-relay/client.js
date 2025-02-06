@@ -27,12 +27,17 @@ export default class Client extends Events {
         this.status = true
         this.auto = opts.auto === false ? opts.auto : true
         if(this.auto){
-            this.ws(true)
+            this.ws()
         }
+        this.checker = setInterval(() => {
+            if(!this.channels.size){
+                this.ws()
+            }
+        }, 60000)
     }
     begin(){
         this.status = true
-        this.ws(true)
+        this.ws()
     }
     end(){
         this.status = false
@@ -746,7 +751,7 @@ export default class Client extends Events {
     freshRelay(channel){
         const count = this.temps.size + this.channels.size
         if(count < 1){
-            this.ws(true)
+            this.ws()
         } else if(count < 3){
             if(!channel.ws){
                 if(channel.msg){
@@ -756,7 +761,7 @@ export default class Client extends Events {
                     delete channel.msg
                 }
             }
-            this.ws(false)
+            this.ws()
         } else if(count < 6){
             this.rtc()
         } else {
@@ -770,9 +775,9 @@ export default class Client extends Events {
         // this.temps.delete(base.id)
         const count = this.temps.size + this.channels.size
         if(count < 1){
-            this.ws(true)
+            this.ws()
         } else if(count < 3){
-            this.ws(false)
+            this.ws()
         } else if(count < 6){
             this.rtc()
         } else {
